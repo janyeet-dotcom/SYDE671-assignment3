@@ -14,6 +14,7 @@ with the simplifications from the handout):
     python3 part2.py --ratio 0.7 --eps 3 --anms 500
     python3 part2.py --points points     # folder with part-1 clicks -> also writes manual-vs-auto comparisons
 """
+
 import argparse, os, time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,8 +24,6 @@ from scipy.spatial import cKDTree
 import part1 as P
 plt.switch_backend("Agg")
 
-# Every set here is stitched automatically. 'lake_b' re-uses the first three lake photos so that there are
-# three independent mosaics (edit freely).
 IMAGE_SETS = {
     "building": ["Photoshoot/IMG_7647.jpeg", "Photoshoot/IMG_7648.jpeg", "Photoshoot/IMG_7649.jpeg"],
     "lake_a":   ["Photoshoot/IMG_7670.JPG", "Photoshoot/IMG_7671.JPG", "Photoshoot/IMG_7672.JPG", "Photoshoot/IMG_7673.JPG"],
@@ -93,13 +92,18 @@ def extract_descriptors(gray, pts, win=40, size=8, blur_sigma=2.0):
 
 # ---------------------------------------------------------------- B.3 matching
 
+def nn_ratios(d1, d2):
+    """For every descriptor in image 1: index of its nearest neighbour in image 2 and the ratio
+    d(1st NN) / d(2nd NN)  (small ratio = the best match is much better than the runner-up = distinctive)."""
+    dists, idx = cKDTree(d2).query(d1, k=2)
+    return idx[:, 0], dists[:, 0] / (dists[:, 1] + 1e-12)
+
 def match_features(d1, d2, ratio=0.7):
     """Lowe ratio test: accept i -> its nearest neighbour j in image 2 if  d(1st NN) / d(2nd NN) < ratio.
     Returns index arrays (i, j) and the ratios."""
-    dists, idx = cKDTree(d2).query(d1, k=2)
-    r = dists[:, 0] / (dists[:, 1] + 1e-12)
+    j, r = nn_ratios(d1, d2)
     good = r < ratio
-    return np.nonzero(good)[0], idx[good, 0], r[good]
+    return np.nonzero(good)[0], j[good], r[good]
 
 
 # ---------------------------------------------------------------- B.4 RANSAC
@@ -155,17 +159,15 @@ def fig_descriptors(gray, pts, descs, path, n=12, seed=1):
     """Show where some descriptors come from, the 40x40 window, and the normalised 8x8 descriptor."""
     rng = np.random.default_rng(seed)
     pick = np.sort(rng.choice(len(pts), min(n, len(pts)), replace=False))
-    fig, ax = plt.subplots(3, len(pick), figsize=(1.6 * len(pick), 5.2), squeeze=False)
+    fig, ax = plt.subplots(2, len(pick), figsize=(1.6 * len(pick), 3.6), squeeze=False)
     for c, k in enumerate(pick):
         x, y = np.rint(pts[k]).astype(int)
         win = gray[max(0, y - 20):y + 20, max(0, x - 20):x + 20]
         ax[0, c].imshow(win, cmap="gray", vmin=0, vmax=1); ax[0, c].set_title(f"#{k}", fontsize=8)
         ax[1, c].imshow(descs[k].reshape(8, 8), cmap="gray", interpolation="nearest")
-        ax[2, c].imshow(descs[k].reshape(8, 8), cmap="coolwarm", interpolation="nearest", vmin=-2.5, vmax=2.5)
-        for r in range(3): ax[r, c].axis("off")
+        for r in range(2): ax[r, c].axis("off")
     ax[0, 0].text(-0.15, 0.5, "40x40\nwindow", transform=ax[0, 0].transAxes, ha="right", va="center", fontsize=8)
     ax[1, 0].text(-0.15, 0.5, "8x8\nnormalised", transform=ax[1, 0].transAxes, ha="right", va="center", fontsize=8)
-    ax[2, 0].text(-0.15, 0.5, "same, +/-", transform=ax[2, 0].transAxes, ha="right", va="center", fontsize=8)
     plt.tight_layout(); plt.savefig(path, dpi=100, pil_kwargs={"quality": 88}); plt.close()
 
 def fig_matches(im1, im2, p1, p2, inl, path, title):
@@ -182,6 +184,79 @@ def fig_matches(im1, im2, p1, p2, inl, path, title):
     ax.set_title(title + f"   (green = RANSAC inliers {int(inl.sum())}, red = outliers {int((~inl).sum())})")
     ax.set_xlim(0, canvas.shape[1]); ax.set_ylim(h, 0)
     plt.tight_layout(); plt.savefig(path, dpi=90, pil_kwargs={"quality": 88}); plt.close()
+
+
+# ---- B.3 figures
+
+def fig_b3_matches(im1, im2, p1, p2, ratios, path, title, ratio_thresh):
+    """All ratio-test matches (no RANSAC), line colour = ratio (dark = very distinctive)."""
+    h = max(im1.shape[0], im2.shape[0]); off = im1.shape[1]
+    canvas = np.zeros((h, off + im2.shape[1], 3), np.float32)
+    canvas[:im1.shape[0], :off] = im1; canvas[:im2.shape[0], off:] = im2
+    fig, ax = plt.subplots(figsize=(16, 16 * h / canvas.shape[1]))
+    ax.imshow(canvas); ax.axis("off")
+    cmap = plt.cm.viridis
+    for k, (a, b, r) in enumerate(zip(p1, p2, ratios)):
+        c = cmap(min(r / ratio_thresh, 1.0))
+        ax.plot([a[0], b[0] + off], [a[1], b[1]], "-", color=c, lw=1.0, alpha=0.9)
+        ax.text(a[0] + 4, a[1] - 4, str(k), color="yellow", fontsize=6)
+        ax.text(b[0] + off + 4, b[1] - 4, str(k), color="yellow", fontsize=6)
+    ax.scatter(p1[:, 0], p1[:, 1], s=10, c="red", edgecolors="w", linewidths=0.4)
+    ax.scatter(p2[:, 0] + off, p2[:, 1], s=10, c="red", edgecolors="w", linewidths=0.4)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, ratio_thresh)); sm.set_array([])
+    fig.colorbar(sm, ax=ax, fraction=0.02, pad=0.01, label="ratio 1-NN / 2-NN (lower = more distinctive)")
+    ax.set_title(f"{title}: {len(p1)} matches passing the ratio test (< {ratio_thresh})")
+    ax.set_xlim(0, canvas.shape[1]); ax.set_ylim(h, 0)
+    plt.tight_layout(); plt.savefig(path, dpi=90, pil_kwargs={"quality": 88}); plt.close()
+
+def fig_patch_pairs(g1, g2, p1, p2, d1, d2, ratios, path, title, n=10):
+    """The n most distinctive matches, side by side: 40x40 window and normalised 8x8 descriptor in each image."""
+    order = np.argsort(ratios)[:n]
+    fig, ax = plt.subplots(4, len(order), figsize=(1.6 * len(order), 7.2), squeeze=False)
+    def window(g, p):
+        x, y = np.rint(p).astype(int)
+        return g[max(0, y - 20):y + 20, max(0, x - 20):x + 20]
+    for c, k in enumerate(order):
+        ax[0, c].imshow(window(g1, p1[k]), cmap="gray", vmin=0, vmax=1)
+        ax[1, c].imshow(window(g2, p2[k]), cmap="gray", vmin=0, vmax=1)
+        ax[2, c].imshow(d1[k].reshape(8, 8), cmap="gray", interpolation="nearest")
+        ax[3, c].imshow(d2[k].reshape(8, 8), cmap="gray", interpolation="nearest")
+        ax[0, c].set_title(f"match {k}\nratio {ratios[k]:.2f}", fontsize=8)
+        for r in range(4): ax[r, c].axis("off")
+    for r, lab in enumerate(["image A\n40x40", "image B\n40x40", "image A\n8x8 desc.", "image B\n8x8 desc."]):
+        ax[r, 0].text(-0.15, 0.5, lab, transform=ax[r, 0].transAxes, ha="right", va="center", fontsize=8)
+    fig.suptitle(title + ": matched feature pairs (most distinctive first)")
+    plt.tight_layout(); plt.savefig(path, dpi=100, pil_kwargs={"quality": 88}); plt.close()
+
+def fig_ratio_threshold(pa, da, pb, db, a, path, title):
+    """Like Fig. 6b of Brown et al.: distribution of the 1-NN/2-NN ratio for correct vs incorrect matches, and how
+    the number of matches / precision change with the threshold. There is no ground truth, so 'correct' =
+    RANSAC inlier of the matches that pass a loose ratio test (0.9)."""
+    j, r = nn_ratios(da, db)
+    loose = np.nonzero(r < 0.9)[0]
+    try:
+        _, inl = ransac_homography(pa[loose], pb[j[loose]], n_iter=a.iters, eps=a.eps)
+    except (RuntimeError, ValueError):
+        return
+    correct = np.zeros(len(da), bool); correct[loose[inl]] = True
+    cand = r < 0.9
+    ts = np.linspace(0.3, 0.9, 61)
+    n_all = np.array([(r < t).sum() for t in ts]); n_ok = np.array([((r < t) & correct).sum() for t in ts])
+    prec = np.where(n_all > 0, n_ok / np.maximum(n_all, 1), np.nan)
+    fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+    bins = np.linspace(0, 0.9, 31)
+    ax[0].hist(r[cand & correct], bins, alpha=0.7, color="green", label=f"correct (RANSAC inliers, {int((cand & correct).sum())})")
+    ax[0].hist(r[cand & ~correct], bins, alpha=0.7, color="red", label=f"incorrect ({int((cand & ~correct).sum())})")
+    ax[0].axvline(a.ratio, color="k", ls="--", label=f"chosen threshold {a.ratio}")
+    ax[0].set_xlabel("ratio  d(1-NN) / d(2-NN)"); ax[0].set_ylabel("number of features"); ax[0].legend(fontsize=8)
+    ax[0].set_title("ratio distribution (cf. Fig. 6b)")
+    ax[1].plot(ts, n_ok, "g-", label="correct matches kept"); ax[1].plot(ts, n_all - n_ok, "r-", label="incorrect matches kept")
+    ax[1].set_xlabel("ratio threshold"); ax[1].set_ylabel("matches")
+    a2 = ax[1].twinx(); a2.plot(ts, prec, "b--", label="precision"); a2.set_ylabel("precision (correct / kept)"); a2.set_ylim(0, 1.05)
+    ax[1].axvline(a.ratio, color="k", ls="--")
+    h1, l1 = ax[1].get_legend_handles_labels(); h2, l2 = a2.get_legend_handles_labels()
+    ax[1].legend(h1 + h2, l1 + l2, fontsize=8, loc="upper center"); ax[1].set_title("effect of the threshold")
+    fig.suptitle(title); plt.tight_layout(); plt.savefig(path, dpi=100, pil_kwargs={"quality": 88}); plt.close()
 
 def fig_manual_vs_auto(name, k, man, auto, path):
     fig, ax = plt.subplots(2, 1, figsize=(14, 2 * 14 * max(man.shape[0] / man.shape[1], auto.shape[0] / auto.shape[1]) + 1))
@@ -224,6 +299,9 @@ def process_set(name, paths, a):
         (pa, da), (pb, db) = feats[i], feats[i + 1]
         ia, ib, ratios = match_features(da, db, a.ratio)
         m1, m2 = pa[ia], pb[ib]
+        fig_b3_matches(imgs[i], imgs[i + 1], m1, m2, ratios, f"{outdir}/b3_matches_{i}_{i+1}.jpg", f"{name}: image {i} -> {i+1}", a.ratio)
+        fig_patch_pairs(grays[i], grays[i + 1], m1, m2, da[ia], db[ib], ratios, f"{outdir}/b3_patch_pairs_{i}_{i+1}.jpg", f"{name} {i}->{i+1}")
+        fig_ratio_threshold(pa, da, pb, db, a, f"{outdir}/b3_ratio_threshold_{i}_{i+1}.jpg", f"{name}: image {i} -> {i+1}")
         try:
             H, inl = ransac_homography(m1, m2, n_iter=a.iters, eps=a.eps)
         except (RuntimeError, ValueError) as ex:
@@ -237,7 +315,8 @@ def process_set(name, paths, a):
         stats.append(dict(i=i, matches=len(ia), inliers=int(inl.sum()), mean=float(err.mean())))
         print(f"[{name}] pair {i}->{i+1}: {len(ia)} ratio-test matches, {int(inl.sum())} RANSAC inliers "
               f"({100 * inl.mean():.0f}%), mean inlier error {err.mean():.2f}px")
-        np.save(f"{outdir}/H_{i}_{i+1}.py", H)
+        np.savetxt(f"{outdir}/H_{i}_{i+1}.txt", H, fmt="%.6f",
+                   header=f"homography mapping image {i} -> image {i+1} (RANSAC, p2 ~ H p1)")
 
     pieces, notes = P.plan_pieces(imgs, Hpair)
     man_H = manual_pair_H(name, paths, imgs) if a.points else None

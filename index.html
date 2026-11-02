@@ -809,7 +809,8 @@ def anms(pts, strength, n_keep=500, c_robust=0.9, chunk=400):
 
 <p>Nice! Now we've got some good features selected, we move onto matching them across images. We might be thinking, hmm,
   even if we know two features are the same, we might not be able to match them if they are in different locations or scales or even
-  lighting conditions. We learned at some point in the past that good features are preserved while being downsampled, so let's do that.
+  lighting conditions. We learned at some point in the past that good features tend to have a good amount of low-frequency information (please trust me
+  on this one), so this is preserved while being downsampled, so let's do that.
   We start by taking a 40x40 pixel patch around each feature, and downsampling it to an 8x8 patch. We're choosing 40x40 because it provides a good balance 
   between capturing enough context, suppressing noise, and maintaining computational efficiency. We can then flatten the 8x8 patch into a 
   64-dimensional vector, and normalize it to have unit length. We also normalize the descriptors to have zero mean and unit standard deviation, so now it's invariant 
@@ -836,7 +837,36 @@ def extract_descriptors(gray, pts, win=40, size=8, blur_sigma=2.0):
 
 </code></pre></details>
 
+<img src='out2\building\descriptors_0.jpg'>
+
 <h3>B.3 Feature Matching</h3>
+
+<p>Dun dah dah! You guessed it, now we have our descriptors and go match them across the different images we have. The first thing we do is use
+  a distance function such as Euclidean distance (L2) or SSD to compare each descriptor in one image to every descriptor in the other image. Now we can see
+  how computationally expensive it would have been if we did not downsample. It's okay if you can't see the problem with this (since I certainly didn't), but
+  the problem is that a single descriptor on one image might have multiple similar distance descriptors from the second image. Lowe's Ratio Test is used to deal 
+  with this problem. It works by taking the two closest matches for each descriptor and comparing their distances. If Lowe's ratio is low, this means that the first
+  descrptor distance is significantly smaller than the second closest descriptor distance, making it a much better match than the second. If it's high, it indicates 
+  that the two descriptors are similar, leading to an ambiguous match. We can threshold this value to filter out the ambiguous matches. 
+</p>
+
+<details class="code-block"><summary>Show Feature matching and Lowe's ratio implementation</summary><pre><code></code>
+def nn_ratios(d1, d2):
+    """For every descriptor in image 1: index of its nearest neighbour in image 2 and the ratio
+    d(1st NN) / d(2nd NN)  (small ratio = the best match is much better than the runner-up = distinctive)."""
+    dists, idx = cKDTree(d2).query(d1, k=2)
+    return idx[:, 0], dists[:, 0] / (dists[:, 1] + 1e-12)
+
+def match_features(d1, d2, ratio=0.7):
+    """Lowe ratio test: accept i -> its nearest neighbour j in image 2 if  d(1st NN) / d(2nd NN) < ratio.
+    Returns index arrays (i, j) and the ratios."""
+    j, r = nn_ratios(d1, d2)
+    good = r < ratio
+    return np.nonzero(good)[0], j[good], r[good]
+</code></pre></details>
+
+<img src='out2\building\b3_matches_0_1.jpg'>
+<img src='out2\building\b3_patche_pairs_0_1.jpg'>
 
 <h3>B.4 RANSAC for Robust Homography</h3>
 
