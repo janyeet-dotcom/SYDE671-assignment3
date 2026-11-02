@@ -1,0 +1,35 @@
+rectification 'building_rect_1'  (Photoshoot/IMG_7647.jpeg, working size [1400, 1050])
+clicked corners TL,TR,BR,BL (x,y):
+[[851.4 588.7]
+ [891.6 592.7]
+ [900.4 720.0]
+ [856.7 721.8]]
+target rectangle 750 x 500 (aspect 1.5 is an assumption):
+[[  0.0   0.0]
+ [750.0   0.0]
+ [750.0 500.0]
+ [  0.0 500.0]]
+
+linear system A h = b:
+A =
+[[    851.4     588.7       1.0       0.0       0.0       0.0      -0.0      -0.0]
+ [      0.0       0.0       0.0     851.4     588.7       1.0      -0.0      -0.0]
+ [    891.6     592.7       1.0       0.0       0.0       0.0 -668700.0 -444525.0]
+ [      0.0       0.0       0.0     891.6     592.7       1.0      -0.0      -0.0]
+ [    900.4     720.0       1.0       0.0       0.0       0.0 -675300.0 -540000.0]
+ [      0.0       0.0       0.0     900.4     720.0       1.0 -450200.0 -360000.0]
+ [    856.7     721.8       1.0       0.0       0.0       0.0      -0.0      -0.0]
+ [      0.0       0.0       0.0     856.7     721.8       1.0 -428350.0 -360900.0]]
+b = [  0.0   0.0 750.0   0.0 750.0 500.0   0.0 500.0]
+
+H =
+[[   11.911655    -0.474318 -9862.352000]
+ [   -0.273575     2.749433 -1385.669273]
+ [   -0.000752     0.000517     1.000000]]
+max reprojection error on the 4 corners = 3.07e-12 px
+warp time: nearest 132 ms, bilinear 436 ms
+
+ERRORS (0-255 pixel units)
+  nearest vs bilinear : RMSE 6.85, mean |diff| 3.93, PSNR 31.4 dB, max |diff| 114, 56.5% of pixels differ by more than 2
+  rotate+back, nearest : RMSE 7.01, mean |err| 0.97, PSNR 31.2 dB (100% of original covered)
+  rotate+back, bilinear: RMSE 11.35, mean |err| 6.75, PSNR 27.0 dB (100% of original covered)
