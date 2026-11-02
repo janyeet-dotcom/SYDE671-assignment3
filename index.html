@@ -68,7 +68,7 @@ details.code-block summary:hover{background:#f3f3f3;}details.code-block[open] su
 
 <h3>A.2 Recovering Homographies</h3>
 
-<p> A homography is a transformation that maps points (x,y) in one image to points, (x',y') in another image that correspond to the same feature.
+<p> A homography is a transformation that maps points (x,y) in one image to points (x',y') in another image that correspond to the same feature.
   This essentially becomes a linear algebra problem, where we want to solve P' ~ H P (equal up to scale), where P and P' are the homogeneous coordinates of the points 
   in the two images, and H is the homography matrix. The homography matrix has 8 degrees of freedom, so we need at least 4 pairs of corresponding 
   points to solve for it. In two images of the same scene, we can usually identify far more than four matching features, so we can use least
@@ -86,6 +86,48 @@ details.code-block summary:hover{background:#f3f3f3;}details.code-block[open] su
   the origin and scaled so that the mean distance from the origin is sqrt(2). This improves numerical conditioning of the least-squares problem and leads to
   more stable homography estimates. 
 </p>
+
+<figure>
+<video width="640" height="360" controls>
+  <source src="out/Manual_click.mp4" type="video/mp4">
+</video>
+<figcaption>Screen recording of the manual point-clicking tool: click a feature in one image, then the same feature in the other.</figcaption>
+</figure>
+
+<p><code>computeH(im1_pts, im2_pts)</code> builds the linear system below from the clicked correspondences and solves it by least squares. 
+    A point (x,y) in image 1 maps to (x',y') in image 2 with</p>
+    
+<pre>x' = (a x + b y + c) / (g x + h y + 1)
+y' = (d x + e y + f) / (g x + h y + 1)
+
+=>  [ x  y  1  0  0  0  -x x'  -y x' ] h = x'
+    [ 0  0  0  x  y  1  -x y'  -y y' ] h = y'      h = [a b c d e f g h]^T</pre>
+    
+<p>Each correspondence adds two rows to A (n points: A is 2n x 8).</p>
+
+<details class="code-block"><summary>Show system-of-equations (build_system) implementation</summary><pre><code>
+def build_system(p1, p2):
+    """
+    n point pairs -&gt; the linear system A h = b for the 8 unknowns of H = [[a b c],[d e f],[g h 1]].
+
+        x' = (a x + b y + c) / (g x + h y + 1),   y' = (d x + e y + f) / (g x + h y + 1)
+
+    Multiply by the denominator and move the unknowns left; the equations become LINEAR:
+
+        a x + b y + c           - g x x' - h y x' = x'
+                  d x + e y + f - g x y' - h y y' = y'
+
+    Each correspondence gives 2 rows, so we need n &gt;= 4 points (H has 8 degrees of freedom).
+    """
+    p1, p2 = np.asarray(p1, float), np.asarray(p2, float)
+    n = len(p1)
+    A, b = np.zeros((2 * n, 8)), np.zeros(2 * n)
+    x, y, xp, yp = p1[:, 0], p1[:, 1], p2[:, 0], p2[:, 1]
+    A[0::2, 0], A[0::2, 1], A[0::2, 2], A[0::2, 6], A[0::2, 7] = x, y, 1, -x * xp, -y * xp
+    A[1::2, 3], A[1::2, 4], A[1::2, 5], A[1::2, 6], A[1::2, 7] = x, y, 1, -x * yp, -y * yp
+    b[0::2], b[1::2] = xp, yp
+    return A, b
+</code></pre></details>
 
 <details class="code-block"><summary>Show homography implementation</summary><pre><code>
 def computeH(im1_pts, im2_pts):
@@ -106,24 +148,6 @@ def computeH(im1_pts, im2_pts):
     H = np.linalg.inv(T2) @ Hn @ T1          # undo the normalisation
     return H / H[2, 2]
 </code></pre></details>
-
-<figure>
-<video width="640" height="360" controls>
-  <source src="out/Manual_click.mp4" type="video/mp4">
-</video>
-<figcaption>Screen recording of the manual point-clicking tool: click a feature in one image, then the same feature in the other.</figcaption>
-</figure>
-
-<p><code>computeH(im1_pts, im2_pts)</code> builds the linear system below from the clicked correspondences and solves it by least squares. 
-    A point (x,y) in image 1 maps to (x',y') in image 2 with</p>
-    
-<pre>x' = (a x + b y + c) / (g x + h y + 1)
-y' = (d x + e y + f) / (g x + h y + 1)
-
-=>  [ x  y  1  0  0  0  -x x'  -y x' ] h = x'
-    [ 0  0  0  x  y  1  -x y'  -y y' ] h = y'      h = [a b c d e f g h]^T</pre>
-    
-<p>Each correspondence adds two rows to A (n points: A is 2n x 8).</p>
 
 <h4>UW Campus Building</h4>
 
@@ -247,7 +271,7 @@ reprojection error: mean 0.53 px, max 1.00 px
 
 <details class="code-block">
 <summary>Show full system of equations + H for every pair</summary>
-<pre><code></code>
+<pre><code>
 ==== pair 0 -> 1  (5 correspondences, 10 equations, 8 unknowns) ====
 im1_pts (x, y):
 [[695.9 509.2]
@@ -378,7 +402,7 @@ recovered H (p2 ~ H p1):
  [    0.001200    -0.000073     1.000000]]
 reprojection error: mean 0.28 px, max 0.54 px
 
-</pre></details>
+</code></pre></details>
 
 <h5>pair 0 &rarr; 1: 5 points, mean reprojection error 0.13 px (max 0.23)</h5>
 
@@ -439,6 +463,22 @@ system A h = b using least-squares on Hartley-normalized coordinates.
 </p>
 
 <p>For each rectification, I clicked the four corners (top-left, top-right, bottom-right, bottom-left) of an object that is a rectangle in real life, and defined the destination points by hand as a true rectangle, 500 px tall and 750 px wide (an assumed aspect ratio of 1.5). <code>computeH</code> maps the clicked quadrilateral onto that rectangle, and everything lying on the same plane then appears as if the camera had been pointed straight at it. A 35% margin is kept around the rectangle so the surrounding scene stays visible. Because the aspect ratio is assumed, a wrong guess shows up as a squashed or stretched rectangle rather than as a failure of the homography.</p>
+
+<details class="code-block"><summary>Show rectification implementation (setup and warps)</summary><pre><code>
+def rectify(job, quad, outdir):
+    """Homography that sends 4 clicked corners of a real-world rectangle to a true rectangle; everything
+    on that plane then looks as if the camera pointed straight at it. quad order: TL, TR, BR, BL."""
+    im = load_image(job["image"])
+    aspect, rect_h, margin = job.get("aspect", 1.0), job.get("rect_h", 500), job.get("margin", 0.35)
+    rect_w = rect_h * aspect
+    dst = np.array([[0, 0], [rect_w, 0], [rect_w, rect_h], [0, rect_h]], float)
+    H = computeH(quad, dst)
+    mx, my = margin * rect_w, margin * rect_h
+    bbox = (int(-mx), int(-my), int(rect_w + mx), int(rect_h + my))
+    nn, m_nn, _ = warpImageNearestNeighbor(im, H, bbox)
+    bl, m_bl, _ = warpImageBilinear(im, H, bbox)
+    ...  # timing, saving the images and the comparison figures are omitted here
+</code></pre></details>
 
 <p>I've made two rectifications below on the UW Campus photos. Run times are shown in the table below.</p>
 
@@ -563,6 +603,39 @@ def _inverse_map(shape, H, bbox):
     return sx, sy, ok_sign, out_shape
 </code></pre></details>
 
+<details class="code-block"><summary>Show nearest neighbour warp implementation</summary><pre><code>
+def warpImageNearestNeighbor(im, H, bbox=None):
+    """Round to the closest source pixel. Returns (warped, mask, (xmin, ymin)); mask = 1 where real data."""
+    bbox = bbox or output_bbox(im.shape, H)
+    sx, sy, ok, (oh, ow) = _inverse_map(im.shape, H, bbox)
+    h, w = im.shape[:2]
+    xi, yi = np.rint(sx).astype(np.int64), np.rint(sy).astype(np.int64)
+    valid = ok &amp; (xi &gt;= 0) &amp; (xi &lt; w) &amp; (yi &gt;= 0) &amp; (yi &lt; h)
+    out = np.zeros((oh * ow,) + im.shape[2:], im.dtype)
+    out[valid] = im[yi[valid], xi[valid]]
+    return out.reshape((oh, ow) + im.shape[2:]), valid.reshape(oh, ow).astype(np.float32), bbox[:2]
+</code></pre></details>
+
+<details class="code-block"><summary>Show bilinear warp implementation</summary><pre><code>
+def warpImageBilinear(im, H, bbox=None):
+    """Weighted average of the 4 surrounding pixels:
+    I(x,y) = (1-dx)(1-dy) I00 + dx(1-dy) I10 + (1-dx)dy I01 + dx dy I11."""
+    bbox = bbox or output_bbox(im.shape, H)
+    sx, sy, ok, (oh, ow) = _inverse_map(im.shape, H, bbox)
+    h, w = im.shape[:2]
+    valid = ok &amp; (sx &gt;= 0) &amp; (sx &lt;= w - 1) &amp; (sy &gt;= 0) &amp; (sy &lt;= h - 1)
+    x, y = np.clip(sx[valid], 0, w - 1), np.clip(sy[valid], 0, h - 1)
+    x0, y0 = np.minimum(np.floor(x).astype(np.int64), w - 2), np.minimum(np.floor(y).astype(np.int64), h - 2)
+    dx, dy = x - x0, y - y0
+    if im.ndim == 3:
+        dx, dy = dx[:, None], dy[:, None]
+    vals = ((1 - dx) * (1 - dy) * im[y0, x0] + dx * (1 - dy) * im[y0, x0 + 1] +
+            (1 - dx) * dy * im[y0 + 1, x0] + dx * dy * im[y0 + 1, x0 + 1])
+    out = np.zeros((oh * ow,) + im.shape[2:], im.dtype)
+    out[valid] = vals
+    return out.reshape((oh, ow) + im.shape[2:]), valid.reshape(oh, ow).astype(np.float32), bbox[:2]
+</code></pre></details>
+
 <h3>A.4 Blend the Images into a Mosaic</h3>
 
 <p>Okay, so now we have accounted for what's happening at each pixel in the final panorama, except that the overlapping parts
@@ -586,6 +659,61 @@ def _inverse_map(shape, H, bbox):
 </ol>
 
 <p>In general, feathering hides exposure differences between images well, but any misalignment (from click error or from the scene not being planar) is averaged into a ghost. The 2-band blend keeps each edge from a single image, so ghosting disappears; however, a leftover misalignment can then appear as a visible seam instead of a blur.</p>
+
+<details class="code-block"><summary>Show homography chaining (homographies_to_reference) implementation</summary><pre><code>
+def homographies_to_reference(Hpair, idxs, ref):
+    """Chain neighbouring homographies so every image maps into the reference image's frame
+    (matrix products going one way, inverses the other). The middle image keeps stretching small."""
+    out = {ref: np.eye(3)}
+    for i in range(ref - 1, idxs[0] - 1, -1):
+        out[i] = out[i + 1] @ Hpair[i]
+    for i in range(ref + 1, idxs[-1] + 1):
+        out[i] = out[i - 1] @ np.linalg.inv(Hpair[i - 1])
+    return {k: v / v[2, 2] for k, v in out.items()}
+</code></pre></details>
+
+<details class="code-block"><summary>Show feather weight implementation</summary><pre><code>
+def feather_weight(shape):
+    """Distance to the nearest image border, normalised: 0 at the edge, 1 at the centre."""
+    h, w = shape[:2]
+    d = distance_transform_edt(np.pad(np.ones((h, w)), 1))[1:-1, 1:-1]
+    return (d / d.max()).astype(np.float32)
+</code></pre></details>
+
+<details class="code-block"><summary>Show blending (feather + 2-band) implementation</summary><pre><code>
+def build_mosaic(imgs, idxs, Hs, max_dim=None, sigma=None):
+    """Warp the images into one canvas and blend two ways in one pass:
+    feather (weighted average by distance-to-border), and
+    twoband (low frequencies feathered with a blurred weight; high frequencies from the single image
+    with the largest weight, so edges cannot ghost)."""
+    max_dim = max_dim or CANVAS_MAX
+    boxes = np.array([output_bbox(imgs[i].shape, Hs[i]) for i in idxs])
+    span = max(boxes[:, 2].max() - boxes[:, 0].min(), boxes[:, 3].max() - boxes[:, 1].min())
+    s = min(1.0, max_dim / span)
+    Hs = {i: np.diag([s, s, 1.0]) @ Hs[i] for i in idxs}
+    boxes = np.array([output_bbox(imgs[i].shape, Hs[i]) for i in idxs])
+    bbox = (boxes[:, 0].min(), boxes[:, 1].min(), boxes[:, 2].max(), boxes[:, 3].max())
+    oh, ow = bbox[3] - bbox[1] + 1, bbox[2] - bbox[0] + 1
+    sigma, eps = sigma or max(3.0, ow / 300.0), 1e-8
+
+    f_num, f_den = np.zeros((oh, ow, 3), np.float32), np.zeros((oh, ow), np.float32)
+    l_num, l_den = np.zeros((oh, ow, 3), np.float32), np.zeros((oh, ow), np.float32)
+    hi_sel, best, cover = np.zeros((oh, ow, 3), np.float32), np.zeros((oh, ow), np.float32), np.zeros((oh, ow), np.float32)
+    for i in idxs:
+        warped, mask, _ = warpImageBilinear(np.dstack([imgs[i], feather_weight(imgs[i].shape)]), Hs[i], bbox)
+        rgb, w = warped[..., :3], warped[..., 3] * mask
+        f_num += w[..., None] * rgb; f_den += w
+        low = gaussian_filter(rgb * mask[..., None], (sigma, sigma, 0)) / (gaussian_filter(mask, sigma)[..., None] + eps)
+        wb = gaussian_filter(w, sigma)
+        l_num += wb[..., None] * low; l_den += wb
+        sel = w &gt; best
+        hi_sel[sel] = (rgb - low)[sel]; best[sel] = w[sel]
+        cover = np.maximum(cover, mask)
+    feather = np.where(f_den[..., None] &gt; 1e-6, f_num / np.maximum(f_den[..., None], eps), 0)
+    twoband = np.where(l_den[..., None] &gt; 1e-6, l_num / np.maximum(l_den[..., None], eps) + hi_sel, 0)
+    out = {"feather": feather, "twoband": twoband}
+    return {k: np.where(cover[..., None] &gt; 0, np.clip(v, 0, 1), 0).astype(np.float32) for k, v in out.items()}
+</code></pre></details>
 
 <h4>UW Campus Building</h4>
 <img src='out/building/mosaic_comparison.jpg'>
