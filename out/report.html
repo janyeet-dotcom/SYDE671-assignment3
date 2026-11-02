@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Assignment 3 - Part 1</title><style>
+body{font-family:system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;line-height:1.5;color:#222}
+img{max-width:100%;border:1px solid #ccc;margin:.3rem 0} pre{background:#f4f4f4;padding:.6rem;overflow:auto;font-size:12px}
+table{border-collapse:collapse} td,th{border:1px solid #bbb;padding:.3rem .6rem;text-align:right} th:first-child,td:first-child{text-align:left}
+h2{border-bottom:2px solid #333;padding-bottom:.2rem;margin-top:2.5rem} .warn{color:#a40}
+</style></head><body><h1>Assignment 3 - Part 1: image warping and mosaicing</h1>
+<h2>A.1 Source images</h2><p>2 image sets, each shot by rotating the camera about (approximately) a fixed centre of projection, so neighbouring images are related by a homography.</p>
+<h3>building (3 images)</h3><img src='building/sources.jpg'>
+<h3>lake_a (4 images)</h3><img src='lake_a/sources.jpg'>
+<h2>A.2 Recovered homographies</h2><p><code>computeH(im1_pts, im2_pts)</code> builds the linear system below from the clicked correspondences and solves it by least squares. A point (x,y) in image 1 maps to (x',y') in image 2 with</p><pre>x' = (a x + b y + c) / (g x + h y + 1)
+y' = (d x + e y + f) / (g x + h y + 1)
+
+=>  [ x  y  1  0  0  0  -x x'  -y x' ] h = x'
+    [ 0  0  0  x  y  1  -x y'  -y y' ] h = y'      h = [a b c d e f g h]^T</pre><p>Each correspondence adds two rows to A (n points: A is 2n x 8).</p>
+<h3>building</h3><p><a href='building/homographies.txt'>full system of equations + H for every pair</a></p>
+<h4>pair 0 &rarr; 1: 8 points, mean reprojection error 1.82 px (max 3.76)</h4><img src='building/corr_0_1.jpg'><pre>H =
+[[    5.69424     0.32215 -3698.39606]
+ [    1.36470     6.51179 -2429.53489]
+ [    0.00208     0.00262     1.00000]]</pre>
+<h4>pair 1 &rarr; 2: 8 points, mean reprojection error 0.53 px (max 1.00)</h4><img src='building/corr_1_2.jpg'><pre>H =
+[[   1.80183   -0.12155 -819.35712]
+ [   0.40230    1.47668 -353.06232]
+ [   0.00058   -0.00004    1.00000]]</pre>
+<h3>lake_a</h3><p><a href='lake_a/homographies.txt'>full system of equations + H for every pair</a></p>
+<h4>pair 0 &rarr; 1: 5 points, mean reprojection error 0.13 px (max 0.23)</h4><img src='lake_a/corr_0_1.jpg'><pre>H =
+[[    2.10252    -0.13634 -1151.46162]
+ [    0.52014     1.69348  -473.00036]
+ [    0.00076     0.00002     1.00000]]</pre>
+<h4>pair 1 &rarr; 2: 12 points, mean reprojection error 1.41 px (max 2.72)</h4><img src='lake_a/corr_1_2.jpg'><pre>H =
+[[    4.04270    -0.10631 -3215.37353]
+ [    1.17324     3.31044 -1253.54845]
+ [    0.00219    -0.00008     1.00000]]</pre>
+<h4>pair 2 &rarr; 3: 5 points, mean reprojection error 0.28 px (max 0.54)</h4><img src='lake_a/corr_2_3.jpg'><pre>H =
+[[    2.68489    -0.06262 -1800.19093]
+ [    0.66278     2.13964  -627.69380]
+ [    0.00120    -0.00007     1.00000]]</pre>
+<h2>A.3 Warping and rectification</h2><p>Both warps use <b>inverse warping</b>: for each output pixel apply H<sup>-1</sup> to find where it came from in the source and sample there (no holes). <i>Nearest neighbour</i> rounds to the closest source pixel; <i>bilinear</i> blends the 4 surrounding pixels. Pixels with no source data get alpha = 0.</p>
+<table><tr><th>rectification</th><th>NN time</th><th>bilinear time</th><th>bilinear / NN</th><th>NN vs bilinear<br>RMSE / PSNR / % px &gt; 2</th><th>rotate-and-back RMSE<br>nearest</th><th>rotate-and-back RMSE<br>bilinear</th></tr>
+<tr><td>building_rect_1</td><td>132 ms</td><td>436 ms</td><td>3.3x</td><td>6.85 / 31.4 dB / 56.5%</td><td>7.01 (31.2 dB)</td><td>11.35 (27.0 dB)</td></tr>
+<tr><td>building_rect_2</td><td>139 ms</td><td>425 ms</td><td>3.1x</td><td>19.44 / 22.4 dB / 85.0%</td><td>7.77 (30.3 dB)</td><td>12.57 (26.1 dB)</td></tr>
+</table><p>Errors are in 0-255 pixel units. <b>NN vs bilinear</b> is how much the two warps disagree. <b>Rotate-and-back</b> rotates the whole image by 7.3&deg; with each method and back again, then compares with the original (the only ground truth available), so it measures how much each interpolation damages the image on its own. A lower number is not automatically better-looking: nearest-neighbour often recovers most pixels EXACTLY (small mean error) but makes large errors on edges (jaggies, half-pixel shifts), while bilinear changes every pixel slightly (blur, applied twice in a round trip) so its RMSE can be higher even though it looks smoother. Compare the numbers with the zoomed images. Full numbers are in each rectification's text file.</p>
+<h3>building_rect_1 <small>(Photoshoot/IMG_7647.jpeg)</small></h3><img src='rectify/building_rect_1_compare.jpg'><img src='rectify/building_rect_1_zoom.jpg'><p><a href='rectify/building_rect_1_homography.txt'>system of equations and H</a></p>
+<h3>building_rect_2 <small>(Photoshoot/IMG_7648.jpeg)</small></h3><img src='rectify/building_rect_2_compare.jpg'><img src='rectify/building_rect_2_zoom.jpg'><p><a href='rectify/building_rect_2_homography.txt'>system of equations and H</a></p>
+<h3>Speed vs quality</h3><p>Bilinear took about 3.2x as long as nearest neighbour (4 reads and ~10 multiply-adds per channel instead of 1 read). In exchange it removes blocky staircase edges and pixel-doubling when the warp enlarges the image (zoom panels), at the cost of slight blur. When the warp shrinks the image both can alias, since neither averages over a footprint.</p>
+<h2>A.4 Mosaics</h2><p><b>Procedure.</b> (1) Recover H between each neighbouring pair from the clicked points. (2) Chain them (products / inverses) so every image maps into the frame of the middle image, which stays unwarped. (3) Push each image's corners through its H to get the mosaic's bounding box. (4) Inverse-warp every image (bilinear) into that canvas together with an alpha mask and a feather weight (distance to the image border). (5) Blend: <i>naive</i> pasting is shown for reference; <i>feathering</i> takes the weighted average at every pixel; the <i>2-band</i> blend feathers only the low frequencies and takes high frequencies from one image per pixel, which removes ghosting. If a flat mosaic of all images is impossible, the longest valid runs are used and the report says so.</p>
+<h3>building</h3>
+<h4>images 0..2 (reference image 1), 2402&times;1464 px</h4><img src='building/mosaic_comparison.jpg'><p>full size: <a href='building/mosaic_naive.jpg'>naive</a> | <a href='building/mosaic_feather.jpg'>feather</a> | <a href='building/mosaic_twoband.jpg'>2-band</a></p>
+<h3>lake_a</h3>
+<p class='warn'>all 4 images do not fit in one flat mosaic (image 0: part of the image would land &#x27;behind&#x27; the camera (view too wide for a plane))</p>
+<p class='warn'>split into overlapping pieces 0..2, 2..3 (a cylindrical/spherical projection would be needed for one panorama)</p>
+<h4>images 0..2 (reference image 1), 2402&times;1419 px</h4><img src='lake_a/mosaic_p0_comparison.jpg'><p>full size: <a href='lake_a/mosaic_p0_naive.jpg'>naive</a> | <a href='lake_a/mosaic_p0_feather.jpg'>feather</a> | <a href='lake_a/mosaic_p0_twoband.jpg'>2-band</a></p>
+<h4>images 2..3 (reference image 3), 2401&times;1671 px</h4><img src='lake_a/mosaic_p1_comparison.jpg'><p>full size: <a href='lake_a/mosaic_p1_naive.jpg'>naive</a> | <a href='lake_a/mosaic_p1_feather.jpg'>feather</a> | <a href='lake_a/mosaic_p1_twoband.jpg'>2-band</a></p>
+</body></html>

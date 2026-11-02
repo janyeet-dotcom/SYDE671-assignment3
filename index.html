@@ -54,52 +54,16 @@ details.code-block summary:hover{background:#f3f3f3;}details.code-block[open] su
   But in case you have, this is the read for you! I started by touching some grass and shooting several sets of images, displayed here. We'll use these images
   for the rest of the assignment. The images feature the heytea line that I painstakingly spent 5 hours in, some sightseeing on UW campus, and Waterloo Park.
 </p>
-<figure>
-  <div class="image-group">
-    <img src="Photoshoot\IMG_7690.PNG" width = "100">
-    <img src="Photoshoot\IMG_7691.PNG" width = "100">
-    <img src="Photoshoot\IMG_7692.PNG" width = "100">
-    <img src="Photoshoot\IMG_7693.PNG" width = "100">
-    <img src="Photoshoot\IMG_7694.PNG" width = "100">
-    <img src="Photoshoot\IMG_7695.PNG" width = "100">
-    <img src="Photoshoot\IMG_7696.PNG" width = "100">
-    <img src="Photoshoot\IMG_7697.PNG" width = "100">
-    <img src="Photoshoot\IMG_7698.PNG" width = "100">
-    <img src="Photoshoot\IMG_7699.PNG" width = "100">
-  </div>
-  <figcaption>heytea line.</figcaption>
-</figure>
 
 <figure>
-  <div class="image-group">
-    <img src="Photoshoot\IMG_7647.jpeg" width = "200">
-    <img src="Photoshoot\IMG_7648.jpeg" width = "200">
-    <img src="Photoshoot\IMG_7649.jpeg" width = "200">
-    <img src="Photoshoot\IMG_7650.jpeg" width = "200">
-    <img src="Photoshoot\IMG_7651.jpeg" width = "200">
-  </div>
+  <img src="out/building/sources.jpg">
   <figcaption>Sunny scene of UW campus.</figcaption>
 </figure>
 
 <figure>
-  <div class="image-group">
-    <img src="Photoshoot\IMG_7670.JPG" width = "200">
-    <img src="Photoshoot\IMG_7671.JPG" width = "200">
-    <img src="Photoshoot\IMG_7672.JPG" width = "200">
-    <img src="Photoshoot\IMG_7673.JPG" width = "200">
-  </div>
+  <img src="out/lake_a/sources.jpg">
   <figcaption>Waterloo Park - park side.</figcaption>
 </figure>
-
-<figure>
-  <div class="image-group">
-    <img src="Photoshoot\IMG_7674.JPG" width = "300">
-    <img src="Photoshoot\IMG_7675.JPG" width = "300">
-    <img src="Photoshoot\IMG_7676.JPG" width = "300">
-  </div>
-  <figcaption>Waterloo Park - boardwalk.</figcaption>
-</figure>
-
 
 <h3>1.2 Recovering Homographies</h3>
 
@@ -117,162 +81,201 @@ details.code-block summary:hover{background:#f3f3f3;}details.code-block[open] su
   handle outliers.
 </p>
 
-<details class="code-block"><summary>Show finite-difference implementation</summary><pre><code>
-DX = np.array([[1, 0, -1]], dtype=float)
-DY = np.array([[1], [0], [-1]], dtype=float)
+<details class="code-block"><summary>Show homography implementation</summary><pre><code>
+def computeH(im1_pts, im2_pts):
+    """
+    H = computeH(im1_pts, im2_pts): n-by-2 arrays of (x, y), returns 3x3 H with p2 ~ H p1.
 
-ix = convolve2d(img, DX, mode="same", boundary="fill", fillvalue=0)
-iy = convolve2d(img, DY, mode="same", boundary="fill", fillvalue=0)
-mag = np.hypot(ix, iy)                 # gradient magnitude, sqrt(Ix^2 + Iy^2)
-
-# blank the zero padding
-mag[[0, -1], :] = 0
-mag[:, [0, -1]] = 0
-edges = mag &gt; 0.3                       # binarize with a threshold
+    With exactly 4 points the system is square and solved exactly, but any click error
+    goes straight into H. With more points the system is OVERDETERMINED, so we solve it
+    in the least-squares sense (minimise ||A h - b||^2), which averages out the noise.
+    """
+    p1, p2 = np.asarray(im1_pts, float), np.asarray(im2_pts, float)
+    assert p1.shape == p2.shape and len(p1) >= 4, "need >= 4 matching points"
+    q1, T1 = _normalize(p1)
+    q2, T2 = _normalize(p2)
+    A, b = build_system(q1, q2)
+    h, *_ = np.linalg.lstsq(A, b, rcond=None)
+    Hn = np.append(h, 1.0).reshape(3, 3)
+    H = np.linalg.inv(T2) @ Hn @ T1          # undo the normalisation
+    return H / H[2, 2]
 </code></pre></details>
 
-<p> We can have a python script calculate these gradients, then threshold them so that a magnitude of a certain strength can be classified as an edge.
-    This threshold is going to be image dependent: a threshold too low will hold noise, while too high will delete the true edges. Using this cameraman
-    image, I have calculated the gradients and applied different thresholds to see how the edges are affected. The results are shown below. The left image is
-    showing the gradient magnitude map of the cameraman image thresholded at various levels. The right image is me having selected 0.3 as the best thresholding
-    level, and showing the original image, the x and y derivatives, the gradient magnitude, and the thresholded edges.
+<video width="640" height="360" controls>
+  <source src="out/Manual_click.mp4" type="video/mp4">
+</video>
+
+<p><code>computeH(im1_pts, im2_pts)</code> builds the linear system below from the clicked correspondences and solves it by least squares. 
+    A point (x,y) in image 1 maps to (x',y') in image 2 with</p>
+    
+<pre>x' = (a x + b y + c) / (g x + h y + 1)
+y' = (d x + e y + f) / (g x + h y + 1)
+
+=>  [ x  y  1  0  0  0  -x x'  -y x' ] h = x'
+    [ 0  0  0  x  y  1  -x y'  -y y' ] h = y'      h = [a b c d e f g h]^T</pre>
+    
+<p>Each correspondence adds two rows to A (n points: A is 2n x 8).</p>
+
+<h4>UW Campus Building</h4>
+
+<p><a href='out/building/homographies.txt'>full system of equations + H for every pair</a></p>
+
+<h5>pair 0 &rarr; 1: 8 points, mean reprojection error 1.82 px (max 3.76)</h5>
+
+<img src='out/building/corr_0_1.jpg'>
+
+<pre>H =
+[[    5.69424     0.32215 -3698.39606]
+ [    1.36470     6.51179 -2429.53489]
+ [    0.00208     0.00262     1.00000]]
+</pre>
+
+<h5>pair 1 &rarr; 2: 8 points, mean reprojection error 0.53 px (max 1.00)</h5>
+
+<img src='out/building/corr_1_2.jpg'>
+
+<pre>H =
+[[   1.80183   -0.12155 -819.35712]
+ [   0.40230    1.47668 -353.06232]
+ [   0.00058   -0.00004    1.00000]]</pre>
+
+
+<h4>Waterloo Park - park side</h4>
+
+<p><a href='out/lake_a/homographies.txt'>full system of equations + H for every pair</a></p>
+
+<h5>pair 0 &rarr; 1: 5 points, mean reprojection error 0.13 px (max 0.23)</h5>
+
+<img src='out/lake_a/corr_0_1.jpg'>
+
+<pre>H =
+[[    2.10252    -0.13634 -1151.46162]
+ [    0.52014     1.69348  -473.00036]
+ [    0.00076     0.00002     1.00000]]</pre>
+
+ <h5>pair 1 &rarr; 2: 12 points, mean reprojection error 1.41 px (max 2.72)</h5>
+
+<img src='out/lake_a/corr_1_2.jpg'>
+
+<pre>H =
+[[    4.04270    -0.10631 -3215.37353]
+ [    1.17324     3.31044 -1253.54845]
+ [    0.00219    -0.00008     1.00000]]</pre>
+<h5>pair 2 &rarr; 3: 5 points, mean reprojection error 0.28 px (max 0.54)</h5>
+
+<img src='out/lake_a/corr_2_3.jpg'>
+
+<pre>H =
+[[    2.68489    -0.06262 -1800.19093]
+ [    0.66278     2.13964  -627.69380]
+ [    0.00120    -0.00007     1.00000]]</pre>
+
+<p> For each adjacent image pair, a homography was estimated using manually selected
+correspondences. The homography parameters were obtained by solving the linear
+system A h = b using least-squares on Hartley-normalized coordinates.
 </p>
 
-<div class="image-container">
-  <figure>
-    <img src="Assignment_Images/differentthresholds.png" alt="Different thresholds of cameraman after gradient calculation" class="center-image">
-    <figcaption>Different thresholds of cameraman after gradient calculation.</figcaption>
-  </figure>
-  <figure>
-    <img src="Assignment_Images/gradients0.3.png" alt="Original cameraman image with derivatives, gradient magnitude, and 0.3 threshold" class="center-image">
-    <figcaption>Original cameraman image with derivatives, gradient magnitude, and 0.3 threshold.</figcaption>
-  </figure>
-</div>
 
-<p>0.3 is what I selected to be the "best" threshold. This is a trade-off, and I chose to lean toward removing noise. At the lowest threshold (0.15) the grass in the foreground turns into a speckle of false edges, and the horizon clutter is noisy.
-   At 0.3, the strong edges (the coat, head, camera and tripod legs) are clean and continuous, and the grass speckle is gone. The price is that faint, low-contrast edges,
-   such as the distant buildings and the horizon line, mostly drop out. Raising the threshold further (0.4&ndash;0.5) starts to
-   break up even the strong edges, such as the tripod legs, so 0.3 was the best compromise. The border pixels are also blanked, since zero padding produces a bright artificial edge around the image.
+<h3>1.3 Warp the Images</h3>
+
+<p> Now that we've computed the homography matrix, how does this exactly translate to putting two images with the same 
+  features together? If we only used the (x,y) coordinate maps that we used to calculate the homography matrix, we'd end up with 
+  holes in the image, as the pixels in the warped image would not be filled in. To solve this, we can use inverse warping, where 
+  we iterate over each pixel in the output image and use the inverse of the homography matrix to find the corresponding pixel in 
+  the input image.
 </p>
 
-<h3>1.3 Derivative of Gaussian (DoG) Filter</h3>
-
-<p> If we look closely at the 0.3-threshold image, you might have noticed that there is still some noise that is captured in the magnitude gradient thresholding.
-    A way to tackle this problem is to smooth the image before calculating the gradients. A common way to do this is to use a Gaussian filter.
+<p> Before warping, we take the image corners, so (0,0), (w,0), (0,h), (w,h) and apply the homography matrix to find the new corners 
+  of the warped image. This allows us to determine the size of the output image and create a grid of pixel coordinates for the output 
+  image. We then apply the inverse homography matrix to each pixel coordinate in the output image to find the corresponding 
+  pixel coordinate in the input image. Finally, we use interpolation to fill in the pixel values in the output image.
 </p>
 
-<p> The Gaussian filter is built with <code>cv2.getGaussianKernel</code> to make a 1D Gaussian, then taking an outer product of it with itself to get the 2D kernel.
-    I used &sigma; = 2 with a 13&times;13 kernel (about 6&sigma; wide, so the tails are negligible).
+<p>To test if our warping implementation is correct, we can take rectifications of known rectangles in the images and spot test them. The
+  warping algorithm will calculate the rectangle's new pixel values, and since these tend to be decimal pixel values, we'll then use
+  interpoliation methods to assign values to the output pixels. Nearest neighbour is the 
+  simplest form of interpolation, where we simply take the value of the nearest pixel in the input image. Bilinear interpolation, on the 
+  other hand, takes a weighted average of the four nearest pixels in the input image, which results in a smoother output image.
 </p>
 
-<details class="code-block"><summary>Show DoG implementation</summary><pre><code>
-def gaussian_2d(ksize, sigma):
-    g = cv2.getGaussianKernel(ksize, sigma).ravel()   # 1D Gaussian
-    return np.outer(g, g)                             # 2D Gaussian (sums to 1)
+<p>I've made two rectifications below on the UW Campus photos. Error (in pixels) and run times are shown in the chart below. </P>
 
-G = gaussian_2d(13, 2.0)
+<table>
+  <tr><th>rectification</th><th>NN time</th><th>bilinear time</th><th>bilinear / NN</th></tr>
+  <tr><td>building_rect_1</td><td>132 ms</td><td>436 ms</td><td>3.3x</td></tr>
+  <tr><td>building_rect_2</td><td>139 ms</td><td>425 ms</td><td>3.1x</td></tr>
+</table>
 
-# blur the image, then differentiate the blurred image
-blurred = conv(img, G)
-bl_x, bl_y = conv(blurred, DX), conv(blurred, DY)
 
-# build the DoG filters by convolving G with D_x and D_y ("full" keeps every tap)
-DoG_x = convolve2d(G, DX, mode="full")
-DoG_y = convolve2d(G, DY, mode="full")
-dog_x, dog_y = conv(img, DoG_x), conv(img, DoG_y)
+<h4>building_rect_1 <small>(Photoshoot/IMG_7647.jpeg)</small></h4>
+<img src='rectify/building_rect_1_compare.jpg'>
+<img src='rectify/building_rect_1_zoom.jpg'>
+<p><a href='rectify/building_rect_1_homography.txt'>system of equations and H</a></p>
+
+<h4>building_rect_2 <small>(Photoshoot/IMG_7648.jpeg)</small></h4>
+<img src='rectify/building_rect_2_compare.jpg'>
+<img src='rectify/building_rect_2_zoom.jpg'>
+<p><a href='rectify/building_rect_2_homography.txt'>system of equations and H</a></p>
+
+<h4>Speed vs quality</h4>
+<p>Bilinear took about 3.3x as long as nearest neighbour (4 reads and ~10 multiply-adds per channel instead of 1 read). In exchange it removes blocky staircase edges and 
+  pixel-doubling when the warp enlarges the image (zoom panels), at the cost of slight blur. When the warp shrinks the image both can alias, since neither averages over 
+  a footprint.</p>
+
+
+<details class="code-block"><summary>Show inverse warping implementation</summary><pre><code>
+def output_bbox(shape, H):
+    h, w = shape[:2]
+    corners = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], float)
+    c = apply_H(H, corners)
+    return (int(np.floor(c[:, 0].min())), int(np.floor(c[:, 1].min())),
+            int(np.ceil(c[:, 0].max())), int(np.ceil(c[:, 1].max())))
+ 
+ 
+def _inverse_map(shape, H, bbox):
+    xmin, ymin, xmax, ymax = bbox
+    xs, ys = np.meshgrid(np.arange(xmin, xmax + 1), np.arange(ymin, ymax + 1))
+    P = np.stack([xs.ravel(), ys.ravel(), np.ones(xs.size)])      # 3 x N
+    Hinv = np.linalg.inv(H)
+    S = Hinv @ P
+    d = S[2]
+    # Guard against the "behind the camera" mirror: for big rotations the denominator
+    # can change sign, and those pixels would wrongly map back into the image.
+    h, w = shape[:2]
+    cw = (H @ np.array([w / 2, h / 2, 1.0]))[2]                  # w' at the image centre
+    ok_sign = (d * cw) > 1e-9 * np.abs(cw)
+    d_safe = np.where(ok_sign, d, 1.0)
+    sx, sy = S[0] / d_safe, S[1] / d_safe
+    out_shape = (ymax - ymin + 1, xmax - xmin + 1)
+    return sx, sy, ok_sign, out_shape
 </code></pre></details>
 
-<p> In this case, we used a Gaussian filter compared to the box filter from Part 1.1. It's kind of hard to compare a photo of me to the cameraman, so I've displayed the
-    original image, the box filter, and the Gaussian filter below. We can see that the box filter provides a more uniform blur while the Gaussian does a better job at preserving
-    the original features. This is because the Gaussian filter takes a weighted sum of the pixels nearby based on their distance from the pixel in question, so edges (which will likely
-    span multiple pixels) will be preserved better than noise, which might only affect a single pixel at a time.
+<h3>1.4 Blend the Images into a Mosaic</h3>
+
+<p>Okay, so now we have accounted for what's happening at each pixel in the final panorama, except the overlapping parts
+  now have two pixel values, one from each image. How do we decide which one to use? We can use a simple approach of taking 
+  the average of the two pixel values, but this can result in visible seams in the final panorama. A better approach is to use 
+  a weighted average, where we give more weight to the pixels that are closer to the centre of the image and less weight to the 
+  pixels that are closer to the edges. This results in a smoother transition between the two images and reduces visible seams.
 </p>
 
-<figure class="single">
-  <img src="Assignment_Images/boxgaussiancomparison.png" alt="Box and Gaussian filter comparison" height="500" class="center-image">
-  <figcaption>Box and Gaussian filter comparison.</figcaption>
-</figure>
-
-<figure class="single">
-  <img src="Assignment_Images/gradientcomparison.png" alt="Gradient map not using and using the Gaussian filter" height="500" class="center-image">
-  <figcaption>Gradient map not using and using the Gaussian filter</figcaption>
-</figure>
-
-<figure class="single">
-  <img src="Assignment_Images/thresholdcomparison.png" alt="Gradient thresholding not using and using the Gaussian filter" height="500" class="center-image">
-  <figcaption>Gradient thresholding not using and using the Gaussian filter</figcaption>
-</figure>
-
-<p> We can see that because the Gaussian helps us reduce some of the noise at an earlier stage, we can use a lower threshold from the gradient map (about 0.12
-    here), while before we had to use a higher one (0.25&ndash;0.3) to avoid capturing noise. The smoothed gradients have a smaller overall magnitude, which is why the
-    absolute threshold is lower, but the noise is suppressed much more than the real edges. Now, we can see the horizon line in the cameraman image clearly compared to before.
+<p>Below, I've shown two blending techniques. <i>Feathering</i> takes the weighted average at every pixel; the <i>2-band</i> 
+  blend feathers only the low frequencies and takes high frequencies from one image per pixel, which removes ghosting.
 </p>
 
-<p>Turns out we can try to simplify the process by combining the Gaussian filtering and the gradient calculation into a single convolution. Convolutions are associative,
-  so convolving the image with a Gaussian filter and then convolving the result with a derivative filter is equivalent to convolving the image with a single filter that
-  is the convolution of the Gaussian and derivative filters. This is called a Derivative of Gaussian (DoG) filter, and it can be used to calculate gradients while also
-  smoothing the image. Here are the Gaussian and the two DoG filters displayed as images:
-</p>
+<h4>UW Campus Building</h4>
+<img src='out/building/mosaic_comparison.jpg'>
 
-<figure class="single">
-  <img src="Assignment_Images/part1_3_kernels.png" alt="Gaussian filter and the DoG_x and DoG_y filters displayed as images" height="350" class="center-image">
-  <figcaption>The Gaussian G (13x13, &sigma; = 2) and the derivative of Gaussian filters DoG<sub>x</sub> = G * D<sub>x</sub> and DoG<sub>y</sub> = G * D<sub>y</sub>.
-              DoG<sub>x</sub> has a bright lobe on one side and a dark lobe on the other: it smooths and takes a horizontal difference at once.</figcaption>
-</figure>
+<h3>Waterloo Park - park side</h3>
+<p Since the 4 images do not fit in one flat mosaic, they are split into overlapping pieces.</p>
 
-<p>We'll make sure the single-convolution version matches the two-step process! The results are shown below.
-</p>
+<img src='out/lake_a/mosaic_p0_comparison.jpg'>
+><img src='out/lake_a/mosaic_p1_comparison.jpg'>
 
-<figure class="single">
-  <img src="Assignment_Images/DoGconv.png" alt="DoG filter comparison to two-step process" height="500" class="center-image">
-  <figcaption>DoG filter comparison to two-step process</figcaption>
-</figure>
 
-<p>The largest absolute difference between "blur then differentiate" and the single DoG convolution is about
-   9e-16 for I<sub>x</sub> and 1e-15 for I<sub>y</sub> away from the border, which is floating-point rounding error, so the two are the same result.
-   Over the whole image the maximum difference is larger (about 0.3) but it comes entirely from the border: with zero padding, the two-step process pads the image
-   once for the blur and then again for the derivative, while the DoG filter pads only once, so the first few pixels at the edge differ. Away from the border (more than
-   half a kernel width in) they match exactly.
-</p>
 
-<h3>Bells &amp; Whistles</h3>
 
-<p> Another way to visualize the image gradients is to add a colour map. For example, if we use HSV (Hue, Saturation, Value) space,
-   we can map the gradient magnitude to the value channel, the gradient direction to the hue channel, and keep the saturation constant.
-    Now at a glance, we can see in what "directions" the edges are oriented. For example, the edge between the background and the cameraman's
-  back is green, meaning that the gradient is oriented in the direction from his back to the background, and in the original image, this corresponds
-   to the edge of the cameraman's back being darker and the edge of the background being lighter.</p>
-
-<figure class="single">
-  <img src="Assignment_Images/HSVgradient.png" alt="HSV gradient visualization" height="500" class="center-image">
-  <figcaption>HSV gradient visualization</figcaption>
-</figure>
-
-<p>To do this without using anything fancy, such as using a built-in angle function, we use the "diamond angle", which only needs arithmetic vs needing <code>arctan2</code>. 
-  With <i>p</i> = I<sub>x</sub> / (|I<sub>x</sub>| + |I<sub>y</sub>|), which lies in [&minus;1, 1] and increases monotonically with the true angle,
-   the hue is (1 &minus; <i>p</i>)/4 when I<sub>y</sub> &ge; 0 (angles 0&deg;&ndash;180&deg;, hue 0 to 0.5) and (3 + <i>p</i>)/4 when I<sub>y</sub> &lt; 0 (angles 180&deg;&ndash;360&deg;, hue 0.5 to 1).
-   It lands on the right values at 0, 45, 90, ... degrees and is off by only a few degrees in between, which doesn't matter for colouring. Saturation is 1 and value is the gradient magnitude
-   (normalized by its 99.5th percentile so a few extreme pixels don't wash out the picture). I computed the gradient from the DoG-filtered image so the orientation isn't noisy.
-   One detail is the sign: row numbers grow downward in an image but the colour wheel has y pointing up, so I negate I<sub>y</sub> before computing the angle. The colour wheel
-   at the right of the figure below is the legend for the mapping (right-pointing gradient = red; left = cyan).
-</p>
-
-<details class="code-block"><summary>Show gradient-orientation implementation</summary><pre><code>
-def pseudo_angle(x, y):
-    """Direction of the vector (x, y) as a number in [0, 1)."""
-    l1 = np.abs(x) + np.abs(y)
-    p = np.divide(x, l1, out=np.zeros_like(x, dtype=float), where=l1 &gt; 0)   # x / (|x| + |y|)
-    return np.where(y &gt;= 0, 1 - p, 3 + p) / 4
-
-def orientation_rgb(ix, iy, mag):
-    hue = pseudo_angle(ix, iy)
-    value = np.clip(mag / np.percentile(mag, 99.5), 0, 1)
-    return hsv_to_rgb(np.dstack([hue, np.ones_like(hue), value]))
-
-rgb = orientation_rgb(dog_x, -dog_y, dog_mag)      
-</code></pre></details>
-
-<h2>Part Two: Fun with Frequencies</h2>
+<h2>Part Two: Feature Matching for Auto-stitching</h2>
 
 <h3>2.1 Image "Sharpening"</h3>
 
