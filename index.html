@@ -729,9 +729,112 @@ def build_mosaic(imgs, idxs, Hs, max_dim=None, sigma=None):
 
 <h2>Part Two: Feature Matching for Auto-stitching</h2>
 
+<p> Part two of this assignment is to implement some functionailities into the image stiching we've done so far from part one
+  to make it automatic from start to finish. The Harris corner detector, feature descriptors, feature matching, and RANSAC all
+  help the script "see" the features and match them.
+</p>
+
 <h3>B.1 Harris Corner Detector</h3>
 
+<p>Computers can't "see" and interpret features as humans do, we can see a patch of blue and call it "sky", or a long blob of brown
+  and a puffier blob of green and call it "tree". We might have already done something similar to a corner detector in part when we
+  manually clicked on the features. I don't know about you, but I liked to choose "corners" of different objects between each of the image
+  pairs earlier because they're easy to find in both images. In contrast, if I clicked in the middle of the sky in one image, chances are
+  the same patch of sky in the other image would be a different shade of blue, and I wouldn't be able to find it. The Harris corner detector 
+  capitalizes on what makes a corner a corner. 
+</p>
+
+<p>Suppose we have a black square on a white background, but it's zoomed so we can only see the top right corner of the square. Then, we translated the square by 40 pixels. 
+  How can you tell the square has been moved? Well, the corner moved. If instead the zoom only allowed us to see the top of the square without the corners, we wouldn't know 
+  if the square had been moved if it moved horizontally unless a corner appears. Point being now, that corners are distinctive features. We call features that change in two 
+  directions a Harris corner.
+</p>
+
+<details class="code-block"><summary>Show Harris corner detector implementation</summary><pre><code></code>
+def harris(gray, sigma_d=1.0, sigma_i=1.5, margin=20, rel_thresh=0.01, max_pts=6000, nms_size=7):
+    """Single-scale Harris detector. Response is the harmonic mean det(M)/tr(M) used in Brown et al.
+    Returns (pts as [x, y], strengths) of local maxima, sorted strongest first, `margin` px away from the border
+    (the 40x40 descriptor window must fit)."""
+    Ix = gaussian_filter(gray, sigma_d, order=(0, 1))
+    Iy = gaussian_filter(gray, sigma_d, order=(1, 0))
+    Sxx, Syy, Sxy = (gaussian_filter(a, sigma_i) for a in (Ix * Ix, Iy * Iy, Ix * Iy))
+    R = (Sxx * Syy - Sxy ** 2) / (Sxx + Syy + 1e-12)
+    peaks = (R == maximum_filter(R, size=nms_size)) & (R > rel_thresh * R.max())
+    h, w = gray.shape
+    peaks[:margin], peaks[-margin:], peaks[:, :margin], peaks[:, -margin:] = False, False, False, False
+    ys, xs = np.nonzero(peaks)
+    f = R[ys, xs]
+    order = np.argsort(-f)[:max_pts]
+    return np.c_[xs[order], ys[order]].astype(np.float64), f[order]
+
+</code></pre></details>
+
+<img src='out2\building\harris_0.jpg'>
+
+<p>Great. Now we have all our Harris corners. Do you notice that the corners tend to be concentrated on certain features, such as 
+  the trees and the leaves on the ground? In the extreme cases, all features matches are concentrated on one feature, which will mess up the
+  homography calculations. We want to have a good distribution of features across the images, so how do we do this? Let's say we have a tree with
+  many good quality corners, and a wall with a poorer quality corner, but it's the only corner within a 40x40 pixel radius. Let's say we have a 
+  certain threshold on "quality" to determine which features to keep. By this metric, we preserve all the corners related to the tree, but we throw away the one related to the wall,
+  but we can agree that the wall corner is a better feature to keep than the tree corners, because it is more distinctive. So, we can use ANMS
+  (Adaptive Non-Maximum Suppression) to deal with this problem.
+</p>
+
+<p>ANMS works by assigning each feature (aka Harris corner) a score based on how far away the nearest significantly stronger corner is. So back to our tree
+  and wall example, the wall corner is the only corner in its 40x40 pixel radius, so it will have a large score. The tree corners are all within 40x40 pixels 
+  of each other, so they will have smaller scores. We can then sort the corners by their scores and keep the top N corners. This way, we ensure that we have a 
+  good distribution of features across the image, and we don't end up with too many features concentrated on one object.
+</p>
+
+<details class="code-block"><summary>Show ANMS (Adaptive Non-Maximum Suppression) implementation</summary><pre><code></code>
+def anms(pts, strength, n_keep=500, c_robust=0.9, chunk=400):
+    """Adaptive Non-Maximal Suppression (Brown et al. sec. 3). Each corner i gets a suppression radius
+        r_i = min_j |x_i - x_j|   over corners j with  f(x_i) < c_robust * f(x_j)
+    (the distance to the nearest clearly-stronger corner). Keeping the n corners with the LARGEST radii gives a
+    set that is strong AND spatially spread out. pts/strength must be sorted strongest first."""
+    n = len(pts)
+    radius = np.full(n, np.inf)
+    for s in range(0, n, chunk):
+        e = min(n, s + chunk)
+        d2 = ((pts[s:e, None, :] - pts[None, :, :]) ** 2).sum(-1)
+        stronger = strength[s:e, None] < c_robust * strength[None, :]
+        d2 = np.where(stronger, d2, np.inf)
+        radius[s:e] = d2.min(axis=1)
+    keep = np.argsort(-radius, kind="stable")[:n_keep]        # strongest corner has radius inf -> always kept
+    return pts[keep], radius[keep]
+
+</code></pre></details>
+
 <h3>B.2 Feature Descriptor Extraction</h3>
+
+<p>Nice! Now we've got some good features selected, we move onto matching them across images. We might be thinking, hmm,
+  even if we know two features are the same, we might not be able to match them if they are in different locations or scales or even
+  lighting conditions. We learned at some point in the past that good features are preserved while being downsampled, so let's do that.
+  We start by taking a 40x40 pixel patch around each feature, and downsampling it to an 8x8 patch. We're choosing 40x40 because it provides a good balance 
+  between capturing enough context, suppressing noise, and maintaining computational efficiency. We can then flatten the 8x8 patch into a 
+  64-dimensional vector, and normalize it to have unit length. We also normalize the descriptors to have zero mean and unit standard deviation, so now it's invariant 
+  to brightness and contrast changes. Now we can compare descriptors using the dot product. Yay for linear algebra!
+</p>
+
+<details class="code-block"><summary>Show Feature descriptor extraction implementation</summary><pre><code></code>
+def extract_descriptors(gray, pts, win=40, size=8, blur_sigma=2.0):
+    """Axis-aligned descriptors: blur the image, then sample an 8x8 grid with spacing 5 px from the 40x40 window
+    around each corner (so each descriptor value is a smoothed average over a big neighbourhood).
+    Bias/gain normalise (zero mean, unit std) for robustness to brightness/contrast changes.
+    Returns (descs [n, 64], pts that were kept)."""
+    blurred = gaussian_filter(gray, blur_sigma)
+    step = win // size                                          # 5
+    offs = (np.arange(size) - size // 2) * step + step // 2 + 0  # -17,-12,...,18 (centred on the corner)
+    h, w = gray.shape
+    xi, yi = np.rint(pts[:, 0]).astype(int), np.rint(pts[:, 1]).astype(int)
+    ok = (xi + offs.min() >= 0) & (xi + offs.max() < w) & (yi + offs.min() >= 0) & (yi + offs.max() < h)
+    xi, yi, pts = xi[ok], yi[ok], pts[ok]
+    patches = blurred[yi[:, None, None] + offs[None, :, None], xi[:, None, None] + offs[None, None, :]]   # n x 8 x 8
+    flat = patches.reshape(len(pts), -1)
+    flat = (flat - flat.mean(1, keepdims=True)) / (flat.std(1, keepdims=True) + 1e-8)
+    return flat, pts
+
+</code></pre></details>
 
 <h3>B.3 Feature Matching</h3>
 
