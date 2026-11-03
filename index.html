@@ -14,8 +14,10 @@ h3 { margin-top: 1.6em; }
 h4 { margin-top: 1.3em; }
 h3, h4, p, ol, ul { max-width: 850px; margin-left: auto; margin-right: auto; box-sizing: border-box; }
 ol, ul { padding-left: 2em; }
-figure { margin: 0; text-align: center; }
-figcaption { font-size: 0.9em; color: #555; margin-top: 6px; }
+figure { margin: 1.4em auto; text-align: center; }
+.image-grid figure { margin: 0; }
+h5 { max-width: 850px; margin: 1.3em auto 0.4em; box-sizing: border-box; }
+figcaption { font-size: 0.9em; color: #555; margin: 8px auto 0; max-width: 850px; text-align: left; }
 img { max-width: 100%; height: auto; }
 .center-image { display: block; margin: 0 auto; }
 .image-container { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; align-items: flex-start; margin: 1.2em 0; }
@@ -31,6 +33,24 @@ code { font-family: Consolas, "Courier New", monospace; }
 p code { background: #f3f3f3; padding: 1px 4px; border-radius: 3px; font-size: 0.92em; }
 details.code-block{max-width:850px;margin:1em auto;border:1px solid #ddd;border-radius:6px;background:#fafafa;}details.code-block summary{cursor:pointer;padding:10px 14px;font-weight:600;user-select:none;}
 details.code-block summary:hover{background:#f3f3f3;}details.code-block[open] summary{border-bottom:1px solid #ddd;}details.code-block pre{margin:0;border:none;border-radius:0;}
+/* numbered captions: Figure N / Table N (appendix: Figure A1, Table A1, ...) */
+body { counter-reset: fig tab afig atab; }
+figcaption::before { counter-increment: fig; content: "Figure " counter(fig) ". "; font-weight: 600; color: #333; }
+.appendix figcaption::before { counter-increment: afig; content: "Figure A" counter(afig) ". "; }
+caption { caption-side: bottom; font-size: 0.9em; color: #555; padding-top: 8px; max-width: 850px; text-align: left; }
+caption::before { counter-increment: tab; content: "Table " counter(tab) ". "; font-weight: 600; color: #333; }
+.appendix caption::before { counter-increment: atab; content: "Table A" counter(atab) ". "; }
+.assignment-nav { text-align: center; margin: 1em 0 0; }
+.assignment-nav a { display: inline-block; margin: 0 6px; padding: 4px 12px; border: 1px solid #ccc; border-radius: 4px; color: #1a4f8b; text-decoration: none; }
+.assignment-nav a[aria-current="page"] { background: #f3f3f3; color: #222; font-weight: 600; }
+.roadmap { text-align: center; color: #555; font-size: 0.95em; margin-top: 1.2em; }
+.roadmap a, .appendix-toc a, p a[href^="#"] { color: #1a4f8b; }
+.appendix h3 { text-align: left; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+.appendix-toc { max-width: 850px; margin: 0.5em auto 1em; }
+.image-grid { align-items: stretch; }
+.image-grid figure { display: flex; flex-direction: column; }
+.image-grid figure img { margin: 0 auto; }
+.image-grid figcaption { margin: auto 0 0; padding-top: 8px; max-width: none; }
 @media (max-width: 700px) { .image-grid { grid-template-columns: 1fr; } }
 </style>
 
@@ -45,44 +65,38 @@ details.code-block summary:hover{background:#f3f3f3;}details.code-block[open] su
   <a href="https://janyeet-dotcom.github.io/SYDE671-assignment3/" aria-current="page" >Assignment 3</a>
 </nav>
 
+<p class="roadmap">Jump to: <a href="#part1">Part One (building)</a> &middot; <a href="#part2">Part Two (lake)</a> &middot; <a href="#compare">Manual vs. automatic</a> &middot; <a href="#appendix">Appendix</a></p>
+
 <!-- ================= PART ONE ================= -->
-<h2>Part One: Image Warping and Mosaicing</h2>
+<h2 id="part1">Part One: Image Warping and Mosaicing</h2>
 
 <h3>A.1 Shoot the Pictures</h3>
 
 <p>Have you ever wondered how our phones make panoramas? I certainly haven't before this assignment! I did a lot of trusting the process, and everything seemed to work out!
-  But in case you have, this is the read for you! I started by touching some grass and shooting several sets of images, displayed here. We'll use these images
-  for the rest of the assignment. The images feature some sightseeing on UW campus and Waterloo Park. The camera center was kept approximately fixed while rotating between shots,
-  producing projective transformations suitable for the rest of the assignment.
+  But in case you have, this is the read for you! I started by touching some grass and shooting several sets of images. The images feature some sightseeing on UW campus and Waterloo Park.
+  We'll use the UW campus building set, displayed here, for Part One and the Waterloo Park set (the "lake") for Part Two, and I use both sets in the comparison at the end. 
+  The camera center was kept approximately fixed while rotating between shots, producing projective transformations suitable for the rest of the assignment.
 </p>
 
 <figure>
-  <img src="out/building/sources.jpg">
-  <figcaption>Sunny scene of UW campus.</figcaption>
-</figure>
-
-<figure>
-  <img src="out/lake_a/sources.jpg">
-  <figcaption>Waterloo Park - park side.</figcaption>
+  <img src="out/building/sources.jpg" alt="The three UW campus building source photos" loading="lazy">
+  <figcaption>UW campus building set: source photos (images 0&ndash;2, left to right).</figcaption>
 </figure>
 
 <h3>A.2 Recovering Homographies</h3>
 
 <p> A homography is a transformation that maps points (x,y) in one image to points (x',y') in another image that correspond to the same feature.
-  This essentially becomes a linear algebra problem, where we want to solve P' ~ H P (equal up to scale), where P and P' are the homogeneous coordinates of the points 
+  This essentially becomes a linear algebra problem, where we want to solve P' = H * P, where P and P' are the homogeneous coordinates of the points 
   in the two images, and H is the homography matrix. The homography matrix has 8 degrees of freedom, so we need at least 4 pairs of corresponding 
   points to solve for it. In two images of the same scene, we can usually identify far more than four matching features, so we can use least
-  squares to solve for the homography matrix. The more points we have, the better our estimate of the homography will be. However, we also need to 
-  be careful about outliers, which are points that do not correspond to the same feature in both images. Outliers can be caused by noise, occlusions, 
-  or incorrect feature matching.
+  squares to solve for the homography matrix. The more points we have, the better our estimate of the homography will be. 
 </p>
 
 <p> In this first part, the points are selected manually by clicking on matching features in both images; in Part 2, we'll find them automatically using 
-  feature detection algorithms. Once we have the corresponding points, we can use them to compute the homography matrix, and in Part 2 we'll use RANSAC to 
-  handle outliers.
+  feature detection algorithms. Once we have the corresponding points, we can use them to compute the homography matrix.
 </p>
 
-<p>Before solving for the homography, Hartley normalization is applied to the point coordinates. The coordinates are translated so their centroid is at 
+<p>Before solving for the homography, Hartley normalization is applied to the point coordinates. This is when the coordinates are translated so their centroid is at 
   the origin and scaled so that the mean distance from the origin is sqrt(2). This improves numerical conditioning of the least-squares problem and leads to
   more stable homography estimates. 
 </p>
@@ -103,53 +117,34 @@ y' = (d x + e y + f) / (g x + h y + 1)
 =>  [ x  y  1  0  0  0  -x x'  -y x' ] h = x'
     [ 0  0  0  x  y  1  -x y'  -y y' ] h = y'      h = [a b c d e f g h]^T</pre>
     
-<p>Each correspondence adds two rows to A (n points: A is 2n x 8).</p>
-
-<details class="code-block"><summary>Show system-of-equations (build_system) implementation</summary><pre><code>
-def build_system(p1, p2):
-    """
-    n point pairs -&gt; the linear system A h = b for the 8 unknowns of H = [[a b c],[d e f],[g h 1]].
-
-        x' = (a x + b y + c) / (g x + h y + 1),   y' = (d x + e y + f) / (g x + h y + 1)
-
-    Multiply by the denominator and move the unknowns left; the equations become LINEAR:
-
-        a x + b y + c           - g x x' - h y x' = x'
-                  d x + e y + f - g x y' - h y y' = y'
-
-    Each correspondence gives 2 rows, so we need n &gt;= 4 points (H has 8 degrees of freedom).
-    """
-    p1, p2 = np.asarray(p1, float), np.asarray(p2, float)
-    n = len(p1)
-    A, b = np.zeros((2 * n, 8)), np.zeros(2 * n)
-    x, y, xp, yp = p1[:, 0], p1[:, 1], p2[:, 0], p2[:, 1]
-    A[0::2, 0], A[0::2, 1], A[0::2, 2], A[0::2, 6], A[0::2, 7] = x, y, 1, -x * xp, -y * xp
-    A[1::2, 3], A[1::2, 4], A[1::2, 5], A[1::2, 6], A[1::2, 7] = x, y, 1, -x * yp, -y * yp
-    b[0::2], b[1::2] = xp, yp
-    return A, b
-</code></pre></details>
-
-<details class="code-block"><summary>Show homography implementation</summary><pre><code>
-def computeH(im1_pts, im2_pts):
-    """
-    H = computeH(im1_pts, im2_pts): n-by-2 arrays of (x, y), returns 3x3 H with p2 ~ H p1.
-
-    With exactly 4 points the system is square and solved exactly, but any click error
-    goes straight into H. With more points the system is OVERDETERMINED, so we solve it
-    in the least-squares sense (minimise ||A h - b||^2), which averages out the noise.
-    """
-    p1, p2 = np.asarray(im1_pts, float), np.asarray(im2_pts, float)
-    assert p1.shape == p2.shape and len(p1) >= 4, "need >= 4 matching points"
-    q1, T1 = _normalize(p1)
-    q2, T2 = _normalize(p2)
-    A, b = build_system(q1, q2)
-    h, *_ = np.linalg.lstsq(A, b, rcond=None)
-    Hn = np.append(h, 1.0).reshape(3, 3)
-    H = np.linalg.inv(T2) @ Hn @ T1          # undo the normalisation
-    return H / H[2, 2]
-</code></pre></details>
+<p>Each correspondence adds two rows to A (n points: A is 2n x 8). The code for <code>build_system</code> and <code>computeH</code> is in <a href="#app-a">Appendix A</a>.</p>
 
 <h4>UW Campus Building</h4>
+
+<h5>pair 0 &rarr; 1: 8 points, mean reprojection error 1.82 px (max 3.76)</h5>
+
+<figure>
+  <img src="out/building/corr_0_1.jpg" alt="Building, pair 0 → 1: the 8 clicked correspondences (red, numbered) on image 0 (left) and image 1 (right)" loading="lazy">
+  <figcaption>Building, pair 0 &rarr; 1: the 8 clicked correspondences (red, numbered) on image 0 (left) and image 1 (right).</figcaption>
+</figure>
+
+<pre>H =
+[[    5.69424     0.32215 -3698.39606]
+ [    1.36470     6.51179 -2429.53489]
+ [    0.00208     0.00262     1.00000]]
+</pre>
+
+<h5>pair 1 &rarr; 2: 8 points, mean reprojection error 0.53 px (max 1.00)</h5>
+
+<figure>
+  <img src="out/building/corr_1_2.jpg" alt="Building, pair 1 → 2: the 8 clicked correspondences on image 1 (left) and image 2 (right)" loading="lazy">
+  <figcaption>Building, pair 1 &rarr; 2: the 8 clicked correspondences on image 1 (left) and image 2 (right).</figcaption>
+</figure>
+
+<pre>H =
+[[   1.80183   -0.12155 -819.35712]
+ [   0.40230    1.47668 -353.06232]
+ [   0.00058   -0.00004    1.00000]]</pre>
 
 <details class="code-block">
 <summary>Show full system of equations + H for every pair</summary>
@@ -247,27 +242,638 @@ recovered H (p2 ~ H p1):
 reprojection error: mean 0.53 px, max 1.00 px
 </code></pre></details>
 
-<h5>pair 0 &rarr; 1: 8 points, mean reprojection error 1.82 px (max 3.76)</h5>
+<p> For each adjacent image pair, a homography was estimated using manually selected
+correspondences. The homography parameters were obtained by solving the linear
+system A h = b using least-squares on Hartley-normalized coordinates.
+</p>
 
-<img src='out/building/corr_0_1.jpg'>
+<p>The reprojection error reported for each pair is the distance, in pixels, between H applied to a clicked point in image 1 and the point 
+  I clicked for it in image 2, averaged (or maximized) over all correspondences. It measures how well a single homography explains all of my clicks, 
+  so it reflects both click accuracy and how well the planar / fixed-centre-of-projection assumption holds. It should be read with the point count in mind: 
+  five points (as in two of the Waterloo Park pairs in <a href="#app-b">Appendix B</a>) give 10 equations for 8 unknowns, so the fit is barely overdetermined and a low error is partly guaranteed. Pairs with more, well-spread 
+  points give a more trustworthy number.
+</p>
 
+
+<h3>A.3 Warp the Images</h3>
+
+<p> Now that we've computed the homography matrix, how does this exactly translate to putting two images with the same 
+  features together? If we simply mapped the coordinates by computing the homography matrix, we'd end up with 
+  holes in the output image, as the pixels in the warped image would not be filled in. To solve this, we can use inverse warping, where 
+  we iterate over each pixel in the output image and use the inverse of the homography matrix to find the corresponding pixel in 
+  the input image.
+</p>
+
+<p> Before warping, we take the four image corners, i.e. (0,0), (w,0), (0,h), (w,h), and apply the homography matrix to find the new corners 
+  of the warped image. This allows us to determine the size of the output image and create a grid of pixel coordinates for the output 
+  image. We then apply the inverse homography matrix to each pixel coordinate in the output image to find the corresponding 
+  pixel coordinate in the input image. Finally, we use interpolation to fill in the pixel values in the output image.
+</p>
+
+<p>Not every output pixel has data: some map back to a location outside the source image, or land "behind the camera", where the denominator of the homography changes 
+  sign and the mapping is meaningless. Rather than treating these black pixels as real, each warp also returns a binary alpha mask (1 where real data exists, 0 elsewhere). 
+  The mask is used when comparing the two interpolation methods (only pixels filled by both are compared) and later when blending. I treat (0,0) as the centre of the first pixel, 
+  so valid source coordinates run from 0 to w-1 and 0 to h-1. Bilinear interpolation needs all four neighbours, so it only keeps coordinates inside that range, while nearest neighbour 
+  keeps any coordinate that rounds to a valid pixel.</p>
+
+<p>To test if our warping implementation is correct, we can rectify objects that are known to be rectangles in the real world and check that they come out rectangular. The
+  warping algorithm maps each output pixel back into the source image, and since the source coordinates it lands on are usually fractional, we'll use
+  interpolation methods to assign values to the output pixels. Nearest neighbour interpolation is the 
+  simplest form of interpolation, where we simply take the value of the nearest pixel in the input image. Bilinear interpolation, on the 
+  other hand, takes a weighted average of the four nearest pixels in the input image, which results in a smoother output image. Both warping functions, the bounding-box computation and 
+  the rectification code are in <a href="#app-a">Appendix A</a>.
+</p>
+
+<p>For each rectification, I clicked the four corners (top-left, top-right, bottom-right, bottom-left) of an object that is a rectangle in real life, and defined the destination points by 
+  hand as a true rectangle, 500 px tall and 750 px wide (an assumed aspect ratio of 1.5). <code>computeH</code> maps the clicked quadrilateral onto that rectangle, and everything lying on the 
+  same plane then appears as if the camera had been pointed straight at it. A 35% margin is kept around the rectangle so the surrounding scene stays visible. Because the aspect ratio is assumed, 
+  a wrong guess shows up as a squashed or stretched rectangle rather than as a failure of the homography.
+</p>
+
+<p>I've made two rectifications below on the UW Campus photos. Run times are shown in the table below.</p>
+
+<table>
+  <caption>Warp times for the two rectifications (best of 3 runs, 750 &times; 500 output plus margin).</caption>
+  <tr><th>rectification</th><th>NN time</th><th>bilinear time</th><th>bilinear / NN</th></tr>
+  <tr><td>building_rect_1</td><td>132 ms</td><td>436 ms</td><td>3.3x</td></tr>
+  <tr><td>building_rect_2</td><td>139 ms</td><td>425 ms</td><td>3.1x</td></tr>
+</table>
+
+<h4>building_rect_1 <small>(Photoshoot/IMG_7647.jpeg)</small></h4>
+<figure>
+  <img src="out/rectify/building_rect_1_compare.jpg" alt="Rectification building_rect_1" loading="lazy">
+  <figcaption>Rectification <code>building_rect_1</code>. Left: the original photo with the four clicked corners; middle: rectified with nearest-neighbour interpolation; right: rectified with bilinear interpolation (warp times in the panel titles).</figcaption>
+</figure>
+<figure>
+  <img src="out/rectify/building_rect_1_zoom.jpg" alt="building_rect_1, zoom on the centre of the rectified image: nearest neighbour (blocky), bilinear (smooth) and the absolute difference between them (×4)" loading="lazy">
+  <figcaption><code>building_rect_1</code>, zoom on the centre of the rectified image: nearest neighbour (blocky), bilinear (smooth) and the absolute difference between them (&times;4).</figcaption>
+</figure>
+
+<details class="code-block">
+<summary>Show system of equations and H</summary>
+<pre><code>
+rectification 'building_rect_1'  (Photoshoot/IMG_7647.jpeg, working size [1400, 1050])
+clicked corners TL,TR,BR,BL (x,y):
+[[851.4 588.7]
+ [891.6 592.7]
+ [900.4 720.0]
+ [856.7 721.8]]
+target rectangle 750 x 500:
+[[  0.0   0.0]
+ [750.0   0.0]
+ [750.0 500.0]
+ [  0.0 500.0]]
+
+linear system A h = b:
+A =
+[[    851.4     588.7       1.0       0.0       0.0       0.0      -0.0      -0.0]
+ [      0.0       0.0       0.0     851.4     588.7       1.0      -0.0      -0.0]
+ [    891.6     592.7       1.0       0.0       0.0       0.0 -668700.0 -444525.0]
+ [      0.0       0.0       0.0     891.6     592.7       1.0      -0.0      -0.0]
+ [    900.4     720.0       1.0       0.0       0.0       0.0 -675300.0 -540000.0]
+ [      0.0       0.0       0.0     900.4     720.0       1.0 -450200.0 -360000.0]
+ [    856.7     721.8       1.0       0.0       0.0       0.0      -0.0      -0.0]
+ [      0.0       0.0       0.0     856.7     721.8       1.0 -428350.0 -360900.0]]
+b = [  0.0   0.0 750.0   0.0 750.0 500.0   0.0 500.0]
+
+H =
+[[   11.911655    -0.474318 -9862.352000]
+ [   -0.273575     2.749433 -1385.669273]
+ [   -0.000752     0.000517     1.000000]]
+max reprojection error on the 4 corners = 3.07e-12 px
+warp time: nearest 132 ms, bilinear 436 ms
+
+</code></pre></details>
+
+<h4>building_rect_2 <small>(Photoshoot/IMG_7648.jpeg)</small></h4>
+<figure>
+  <img src="out/rectify/building_rect_2_compare.jpg" alt="Rectification building_rect_2" loading="lazy">
+  <figcaption>Rectification <code>building_rect_2</code>. Left: the original photo with the four clicked corners; middle: nearest neighbour; right: bilinear.</figcaption>
+</figure>
+<figure>
+  <img src="out/rectify/building_rect_2_zoom.jpg" alt="building_rect_2, zoom on the centre of the rectified image: nearest neighbour, bilinear and the absolute difference (×4)" loading="lazy">
+  <figcaption><code>building_rect_2</code>, zoom on the centre of the rectified image: nearest neighbour, bilinear and the absolute difference (&times;4).</figcaption>
+</figure>
+
+<details class="code-block">
+<summary>Show system of equations and H</summary>
+<pre><code>
+
+rectification 'building_rect_2'  (Photoshoot/IMG_7648.jpeg, working size [1400, 1050])
+clicked corners TL,TR,BR,BL (x,y):
+[[1356.7  648.4]
+ [1369.6  648.7]
+ [1369.3  664.4]
+ [1357.6  664.4]]
+target rectangle 750 x 500:
+[[  0.0   0.0]
+ [750.0   0.0]
+ [750.0 500.0]
+ [  0.0 500.0]]
+
+linear system A h = b:
+A =
+[[    1356.7      648.4        1.0        0.0        0.0        0.0       -0.0       -0.0]
+ [       0.0        0.0        0.0     1356.7      648.4        1.0       -0.0       -0.0]
+ [    1369.6      648.7        1.0        0.0        0.0        0.0 -1027200.0  -486525.0]
+ [       0.0        0.0        0.0     1369.6      648.7        1.0       -0.0       -0.0]
+ [    1369.3      664.4        1.0        0.0        0.0        0.0 -1026975.0  -498300.0]
+ [       0.0        0.0        0.0     1369.3      664.4        1.0  -684650.0  -332200.0]
+ [    1357.6      664.4        1.0        0.0        0.0        0.0       -0.0       -0.0]
+ [       0.0        0.0        0.0     1357.6      664.4        1.0  -678800.0  -332200.0]]
+b = [  0.0   0.0 750.0   0.0 750.0 500.0   0.0 500.0]
+
+H =
+[[     8.750596     -0.492221 -11552.778001]
+ [    -0.101058      4.345499  -2680.516011]
+ [    -0.000202     -0.000883      1.000000]]
+max reprojection error on the 4 corners = 1.10e-11 px
+warp time: nearest 139 ms, bilinear 425 ms
+
+</code></pre></details>
+
+<h4>Speed vs quality</h4>
+<p>Bilinear took about 3.1-3.3x as long as nearest neighbour (4 reads and ~10 multiply-adds per channel instead of 1 read). In exchange it removes blocky staircase edges and 
+  pixel-doubling when the warp enlarges the image (zoom panels), at the cost of slight blur. When the warp shrinks the image both can alias, since neither averages over 
+  a footprint.</p>
+
+<h3>A.4 Blend the Images into a Mosaic</h3>
+
+<p>Okay, so now we have accounted for what's happening at each pixel in the final panorama, except that the overlapping parts
+  now have two pixel values, one from each image. How do we decide which one to use? We can use a simple approach of taking 
+  the average of the two pixel values, but this can result in visible seams in the final panorama. A better approach is to use 
+  a weighted average, where we give more weight to the pixels that are closer to the centre of the image and less weight to the 
+  pixels that are closer to the edges. This results in a smoother transition between the two images and reduces visible seams. I 
+  also decided to try 2-band blending, since in the last assignment we used it for our hybrid images!
+</p>
+
+<p>Below, I've shown two blending techniques. <i>Feathering</i> takes the weighted average at every pixel; the <i>2-band</i> 
+  blend feathers only the low frequencies and takes high frequencies from one image per pixel, which removes ghosting.
+</p>
+
+<h4>Procedure</h4>
+<ol>
+  <li><b>Choose a reference.</b> The middle image of each run is the reference. Every other image is mapped into its frame by 
+    chaining the pairwise homographies: images on one side multiply the pair homographies toward the reference, images on the 
+    other side use their inverses. Using the middle image keeps the outer images from being stretched too much.
+  </li>
+  <li><b>Size the canvas.</b> Every image's four corners are pushed through its homography and the union of the bounding boxes 
+    becomes the canvas. If the longest side exceeds 2400 px, everything is scaled down.
+  </li>
+  <li><b>Warp.</b> Each image is inverse-warped onto the canvas with bilinear interpolation, together with its alpha mask and its 
+    feathering weight.
+  </li>
+  <li><b>Feather.</b> The weight of a pixel is its distance to the nearest image border (a distance transform), normalized to 0 at 
+    the edge and 1 at the centre. The feathered mosaic is the weighted average sum(w &middot; I) / sum(w) at every pixel.
+  </li>
+  <li><b>2-band blend.</b> Each warped image is split into a low-frequency part (Gaussian blur, normalized by the blurred mask so 
+    empty black pixels do not bleed in) and a high-frequency part (image minus low-pass). The low frequencies are blended with blurred weights, 
+    while the high frequencies come from whichever image has the largest weight at that pixel. This is a 2-level pyramid.
+  </li>
+</ol>
+
+<p>The code for the homography chaining, the feathering weights and the blending is in <a href="#app-a">Appendix A</a>.</p>
+
+<p>In general, feathering hides exposure differences between images well, but any misalignment (from click error or from 
+  the scene not being planar) is averaged into a ghost (look at the tree beside the building in the feathered image). The 
+  2-band blend keeps each edge from a single image, so ghosting disappears; however, a leftover misalignment can then appear 
+  as a visible seam instead of a blur.
+</p>
+
+<h4>UW Campus Building</h4>
+<figure>
+  <img src="out/building/mosaic_comparison.jpg" alt="UW campus building mosaic from the manual correspondences" loading="lazy">
+  <figcaption>UW campus building mosaic from the manual correspondences. Top: the three source images; middle: feathered blend; bottom: 2-band blend.</figcaption>
+</figure>
+
+<p>I stitched the Waterloo Park photos by hand as well. All four of them do not fit on one flat plane, so that mosaic is split into two overlapping pieces; those results are in
+  <a href="#app-b">Appendix B</a>, and the lake is the main example for Part Two, where I compare the manual and the automatic result on both image sets.</p>
+
+<h2 id="part2">Part Two: Feature Matching for Auto-stitching</h2>
+
+<p>Part two of this assignment is to add some functionalities to the image stitching we've done so far from part one to make it automatic from
+  start to finish. The Harris corner detector, feature descriptors, feature matching, and RANSAC all help the script "see" the features and match them.
+  The pipeline follows <i>Multi-Image Matching using Multi-Scale Oriented Patches</i> by Brown, Szeliski and Winder, with the simplifications from the
+  assignment (a single scale, no rotation invariance, no wavelet transform). All of the geometry (<code>computeH</code>, the warps and the blending) is
+  reused from Part 1 unchanged, so the only thing that changes is where the point correspondences come from. I walk through the pipeline on the Waterloo Park
+  photos (the "lake" set below) and build the mosaic from its first three images. The same pipeline was also run on the UW campus building; those figures, all the code
+  and the parameters are in the <a href="#appendix">appendix</a>.
+</p>
+
+<figure>
+  <img src="out/lake_a/sources.jpg" alt="The four Waterloo Park source photos" loading="lazy">
+  <figcaption>Waterloo Park (lake) set: source photos (images 0&ndash;3, left to right). The mosaic in this part uses images 0&ndash;2.</figcaption>
+</figure>
+
+
+<h3>B.1 Harris Corner Detector</h3>
+
+<p>Computers can't "see" and interpret features as humans do: we can see a patch of blue and call it "sky", or a long blob of brown
+  and a puffier blob of green and call it "tree". We might have already done something similar to a corner detector in Part 1 when we
+  manually clicked on the features. I don't know about you, but I liked to choose "corners" of different objects between each of the image
+  pairs earlier because they're easy to find in both images. In contrast, if I clicked in the middle of the sky in one image, chances are
+  the same patch of sky in the other image would be a different shade of blue, and I wouldn't be able to find it. The Harris corner detector
+  capitalizes on what makes a corner a corner.
+</p>
+
+<p>Suppose we have a black square on a white background, but it's zoomed so we can only see the top right corner of the square. Then, we translated the square by 40 pixels.
+  How can you tell the square has been moved? Well, the corner moved. If instead the zoom only allowed us to see the top of the square without the corners, we wouldn't know
+  if the square had been moved if it moved horizontally unless a corner appears (this is known as the aperture problem). Point being now, that corners are distinctive features.
+  A Harris corner is a point where the image changes strongly in two directions at once.
+</p>
+
+<p>Concretely, at every pixel the detector looks at the image gradients (I<sub>x</sub>, I<sub>y</sub>, computed with a Gaussian derivative, &sigma; = 1) inside a small
+  Gaussian-weighted window (&sigma; = 1.5) and builds the 2&times;2 matrix M = &Sigma; w &middot; [I<sub>x</sub>&sup2;, I<sub>x</sub>I<sub>y</sub>; I<sub>x</sub>I<sub>y</sub>, I<sub>y</sub>&sup2;].
+  If both eigenvalues of M are small the patch is flat, if only one is large it is an edge, and if both are large it is a corner. Instead of the usual
+  det(M) &minus; k&middot;trace(M)&sup2; score I used the harmonic-mean response from the paper, R = det(M) / trace(M) = &lambda;<sub>1</sub>&lambda;<sub>2</sub> / (&lambda;<sub>1</sub> + &lambda;<sub>2</sub>), which has
+  no k to tune. The corners are the local maxima of R in a 7&times;7 neighbourhood that are above 1% of the strongest response and at least 20 px from the image border (so the 40&times;40
+  descriptor window later fits). At most the strongest 6000 are kept, a cap that the lake photos never reach. The code is in <a href="#app-c">Appendix C</a>.
+</p>
+
+<figure>
+  <img src="out2/lake_a/harris_1.jpg" alt="Harris corners with and without ANMS" loading="lazy">
+  <figcaption>Waterloo Park, image 1. Left: all 3506 Harris corners, which pile up on the tree line and its reflection. Right: the 500 corners kept by ANMS, which are spread much more evenly over the trees and the water (the featureless sky has no corners at all).</figcaption>
+</figure>
+
+
+<p>Great. Now we have all our Harris corners. Do you notice that the corners tend to be concentrated on certain features, such as
+  the tree line and its reflection in the water? In the extreme cases, all feature matches are concentrated on one feature, which will mess up the
+  homography calculations. We want to have a good distribution of features across the images, so how do we do this? Let's say we have a tree with
+  many good quality corners, and a wall with a poorer quality corner, but it's the only corner within 40 pixels. Let's say we have a
+  certain threshold on "quality" to determine which features to keep. By this metric, we preserve all the corners related to the tree, but we throw away the one related to the wall,
+  but we can agree that the wall corner is a better feature to keep than the tree corners, because it is more distinctive. So, we can use ANMS
+  (Adaptive Non-Maximal Suppression) to deal with this problem.
+</p>
+
+<p>ANMS works by assigning each feature (aka Harris corner) a score based on how far away the nearest significantly stronger corner is. So back to our tree
+  and wall example, the wall corner is the only corner within 40 pixels, so it will have a large score. The tree corners are all within 40 pixels
+  of each other, so they will have smaller scores. "Significantly stronger" means f(x<sub>i</sub>) &lt; 0.9 &middot; f(x<sub>j</sub>) (the paper's c<sub>robust</sub> = 0.9), so a corner is only suppressed by one
+  that is clearly stronger than it. We can then sort the corners by their scores and keep the top N corners (N = 500 here). This way, we ensure that we have a
+  good distribution of features across the image, and we don't end up with too many features concentrated on one object. The right panel of the figure above shows the
+  corners that survive. The ANMS code is also in <a href="#app-c">Appendix C</a>.
+</p>
+
+<h3>B.2 Feature Descriptor Extraction</h3>
+
+<p>Nice! Now we've got some good features selected, we move onto matching them across images. We might be thinking, hmm,
+  even if we know two features are the same, we might not be able to match them if they are in slightly different locations or even
+  lighting conditions. The trick is to describe each corner with a big, blurry neighbourhood instead of a tiny sharp one: the low-frequency content of a patch barely
+  changes if the corner is a pixel or two off or the viewpoint shifts a little, whereas fine detail would not survive that. So for each feature we take the 40x40 pixel window
+  around it, blur the image (Gaussian, &sigma; = 2) so that sampling does not alias, and take an 8x8 grid of samples spaced 5 pixels apart. We're choosing 40x40 because it provides a good balance
+  between capturing enough context, suppressing noise, and maintaining computational efficiency. We then flatten the 8x8 patch into a
+  64-dimensional vector and bias/gain normalize it (subtract the mean, divide by the standard deviation), so it is invariant
+  to brightness and contrast changes. Two descriptors can then be compared with their Euclidean distance (for vectors normalized this way, a small distance is the same as a high correlation). Yay for linear algebra!
+</p>
+
+<p>These descriptors are axis-aligned and single-scale, so they are not invariant to rotation or scale (the assignment allows this). That works here because the
+  camera was only turned side to side from the same spot, so the same feature looks nearly identical in neighbouring photos, but it would fail on tilted or zoomed shots. The code is in <a href="#app-c">Appendix C</a>.
+</p>
+
+<figure>
+  <img src="out2/lake_a/descriptors_1.jpg" alt="Extracted 8x8 feature descriptors" loading="lazy">
+  <figcaption>Waterloo Park, image 1: twelve randomly chosen features. Top row: the 40&times;40 grayscale window around the corner. Bottom row: the normalized 8&times;8 descriptor extracted from it, displayed as an image. Notice how similar the water-ripple patches (#17, #155, #370, #433) look to each other: that is exactly the kind of ambiguity the ratio test has to deal with next.</figcaption>
+</figure>
+
+
+<h3>B.3 Feature Matching</h3>
+
+<p>Dun dah dah! You guessed it, now we have our descriptors and go match them across the different images we have. The first thing we do is use
+  a distance function such as Euclidean distance (L2) or SSD to compare each descriptor in one image to every descriptor in the other image. Now we can see
+  how computationally expensive it would have been if we did not downsample. It's okay if you can't see the problem with this (since I certainly didn't), but
+  the problem is that a single descriptor on one image might have multiple similar distance descriptors from the second image. Lowe's Ratio Test is used to deal
+  with this problem. It works by taking the two closest matches for each descriptor and comparing their distances. If Lowe's ratio is low, this means that the first
+  descriptor distance is significantly smaller than the second closest descriptor distance, making it a much better match than the second. If it's high, it indicates
+  that the two descriptors are similar, leading to an ambiguous match. We can threshold this value to filter out the ambiguous matches.
+</p>
+
+<p>In the code (<a href="#app-c">Appendix C</a>), the two nearest neighbours of every descriptor in image <i>i</i> are found in image <i>i</i>+1 with a k-d tree (<code>scipy.spatial.cKDTree</code>) rather than a brute-force loop,
+  and a match is kept when the ratio is below 0.7. The test only runs in one direction (image <i>i</i> to image <i>i</i>+1); I did not add a left-right consistency check because RANSAC removes the remaining wrong matches in the next step.
+  The figures below show the matches between images 1 and 2.
+</p>
+
+<figure>
+  <img src="out2/lake_a/b3_matches_1_2.jpg" alt="Features matched between image 1 and image 2" loading="lazy">
+  <figcaption>Waterloo Park, image 1 &rarr; 2: the 41 features that pass the ratio test (&lt; 0.7), drawn as numbered lines between the two images. Line colour is the ratio (darker = more distinctive). RANSAC has not been applied yet, so some wrong matches remain, mostly on the water.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/b3_patch_pairs_1_2.jpg" alt="Matched feature windows and descriptors side by side" loading="lazy">
+  <figcaption>Waterloo Park, image 1 &rarr; 2: the ten most distinctive matches (lowest ratio). Rows 1 and 3 are the 40&times;40 window and the 8&times;8 descriptor from image 1, rows 2 and 4 the same from image 2; matched pairs look very similar.</figcaption>
+</figure>
+
+
+<p>The assignment asks us to pick the threshold using Figure 6b of the paper, which plots how the ratio is distributed for correct and for incorrect matches. The figure below is my version of it.
+  There is no ground truth for these photos, so I call a match "correct" if it later turns out to be a RANSAC inlier (candidates are collected with a loose ratio of 0.9 first). The two groups separate nicely:
+  correct matches have ratios mostly between 0.15 and 0.6, while incorrect matches pile up near 1, which is what we expect from ambiguous matches (ripples on the water all look alike). For this pair every match below a ratio of
+  about 0.55 is correct, the precision is still 96% at 0.6, falls to 80% at 0.7, and collapses to 62% at 0.8 and 33% at 0.9, while the number of correct matches keeps growing only slowly.
+  I settled on 0.7, which keeps about 70% of the correct matches and removes over 90% of the incorrect ones. A stricter threshold would be cleaner but leaves fewer than 25 matches, and RANSAC can deal with the few wrong ones that remain.
+</p>
+
+<figure>
+  <img src="out2/lake_a/b3_ratio_threshold_1_2.jpg" alt="Ratio distribution for correct and incorrect matches" loading="lazy">
+  <figcaption>Waterloo Park, image 1 &rarr; 2, my version of the paper's Fig. 6b. Left: histogram of the ratio d(1-NN) / d(2-NN) for matches that turned out correct (green, RANSAC inliers) and incorrect (red). Right: number of correct and incorrect matches kept, and the precision, as the threshold changes. The dashed line is the chosen threshold, 0.7.</figcaption>
+</figure>
+
+
+<h3>B.4 RANSAC for Robust Homography</h3>
+
+<p>We've come very far in trying to automatically match features across the images, and we're really close to achieving our goal. Homographies
+  are unfortunately very sensitive to outliers (least squares gives a wrong match as much say as a right one), and you can see in the figure above that there are still some matches that are not correct. Is there another
+  way we can screen out the bad matches? A huge benefit of this whole automation process is that we have a large number of matches to work with, compared
+  to the clicking before, where it would take a long time to click on even a few features. Because of that we can use RANSAC
+  (Random Sample Consensus). RANSAC works by randomly sampling the minimum number of matches we need, four, and computing the exact homography from just those. If all four happen to be correct matches the homography will be good,
+  and if even one is an outlier it will be garbage. Either way, we can tell which one happened by counting how many of all the matches agree with that homography, i.e. have a reprojection error below &epsilon; = 3 pixels; these are the inliers.
+  We repeat this 5000 times, keep the homography with the most inliers, and then re-fit it by least squares (<code>computeH</code> from Part 1) on all of its inliers, which averages out the noise.
+  The figure below takes the matches from the previous step and sorts them into inliers and outliers. The implementation is in <a href="#app-c">Appendix C</a>.
+</p>
+
+<p>How many iterations do we really need? If a fraction p of the matches are correct, a random sample of 4 is entirely correct with probability p<sup>4</sup>. Here 34 of 41 matches are correct, so p &asymp; 0.83, that probability is about 0.47, and about 8 iterations would
+  already give a 99% chance of drawing at least one clean sample (for the foliage-heavy building pairs, p &asymp; 0.6 and it is about 35). So 5000 iterations is far more than enough, and still fast.
+</p>
+
+<figure>
+  <img src="out2/lake_a/matches_1_2.jpg" alt="RANSAC inliers and outliers" loading="lazy">
+  <figcaption>Waterloo Park, image 1 &rarr; 2: the 41 ratio-test matches classified by RANSAC. Green lines are the 34 inliers, red lines the 7 outliers that were rejected, most of them on the water where ripples and reflections look alike.</figcaption>
+</figure>
+
+
+<table>
+  <caption>Matching and RANSAC statistics for every pair of lake photos. The mean error is the reprojection error of the final homography on its own inliers, in pixels at 1400 &times; 1050.</caption>
+  <tr><th>pair</th><th>ratio-test matches</th><th>RANSAC inliers</th><th>inlier fraction</th><th>mean inlier error (px)</th></tr>
+  <tr><td>Waterloo Park 0 &rarr; 1</td><td>54</td><td>54</td><td>100%</td><td>0.63</td></tr>
+  <tr><td>Waterloo Park 1 &rarr; 2</td><td>41</td><td>34</td><td>83%</td><td>0.88</td></tr>
+  <tr><td>Waterloo Park 2 &rarr; 3</td><td>60</td><td>55</td><td>92%</td><td>0.78</td></tr>
+</table>
+
+<p>The recovered homographies for the two pairs that go into the mosaic (image <i>i</i> &rarr; image <i>i</i>+1, p2 ~ H p1) are below; the one for pair 2 &rarr; 3 is saved as a text file in the <a href="#app-e">appendix</a>.</p>
+
+<h5>pair 0 &rarr; 1: 54 inliers, mean reprojection error 0.63 px</h5>
 <pre>H =
-[[    5.69424     0.32215 -3698.39606]
- [    1.36470     6.51179 -2429.53489]
- [    0.00208     0.00262     1.00000]]
-</pre>
+[[    2.18140    -0.13119 -1203.59611]
+ [    0.54951     1.77833  -518.58441]
+ [    0.00085    -0.00004     1.00000]]</pre>
 
-<h5>pair 1 &rarr; 2: 8 points, mean reprojection error 0.53 px (max 1.00)</h5>
-
-<img src='out/building/corr_1_2.jpg'>
-
+<h5>pair 1 &rarr; 2: 34 inliers, mean reprojection error 0.88 px</h5>
 <pre>H =
-[[   1.80183   -0.12155 -819.35712]
- [   0.40230    1.47668 -353.06232]
- [   0.00058   -0.00004    1.00000]]</pre>
+[[    3.12629    -0.11757 -2459.64000]
+ [    0.85148     2.51457  -870.72101]
+ [    0.00158    -0.00019     1.00000]]</pre>
+
+<p>Now we feed these homographies back into the warping and blending code from Part 1. The middle image (image 1) is the reference, exactly as in Part 1, and the result is below. As in Part 1, all four lake photos do not fit on one flat plane,
+  so the mosaic uses images 0&ndash;2; the second piece (images 2&ndash;3) and a single cylindrical panorama of the whole lake are in <a href="#app-e">Appendix E</a>.
+</p>
+
+<figure>
+  <img src="out2/lake_a/auto_mosaic_p0_comparison.jpg" alt="Automatic lake mosaic" loading="lazy">
+  <figcaption>Waterloo Park: automatic mosaic of images 0&ndash;2. Top: the three source images; middle: feathered blend; bottom: 2-band blend.</figcaption>
+</figure>
 
 
-<h4>Waterloo Park - park side</h4>
+<h2 id="compare">Manual vs. Automatic Stitching</h2>
+
+<p>Finally, let's compare Part One and Part Two on both image sets. In every row below, the left image is stitched with the homographies from my clicks and the right image with the automatic ones. Both use the same warping code and the same
+  2-band blend, so the only difference is where the correspondences came from.
+</p>
+
+<div class="image-grid">
+<figure>
+  <img src="out2/building/manual_mosaic_twoband.jpg" alt="Building mosaic, manual" loading="lazy">
+  <figcaption>UW campus building mosaic: manual correspondences (Part 1).</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/auto_mosaic_twoband.jpg" alt="Building mosaic, automatic" loading="lazy">
+  <figcaption>UW campus building mosaic: automatic correspondences (Part 2).</figcaption>
+</figure>
+</div>
+
+<div class="image-grid">
+<figure>
+  <img src="out2/lake_a/manual_mosaic_p0_twoband.jpg" alt="Waterloo Park mosaic, manual" loading="lazy">
+  <figcaption>Waterloo Park mosaic (images 0&ndash;2): manual correspondences (Part 1).</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/auto_mosaic_p0_twoband.jpg" alt="Waterloo Park mosaic, automatic" loading="lazy">
+  <figcaption>Waterloo Park mosaic (images 0&ndash;2): automatic correspondences (Part 2).</figcaption>
+</figure>
+</div>
+
+
+<p>The building shows the biggest difference. My 8 clicks for pair 0 &rarr; 1 all sit on a couple of windows and cover only about 10% &times; 12% of each image, whereas the automatic inliers cover about 45% &times; 57%.
+  The manual homography fits its own clicks well (1.8 px) but is badly constrained everywhere else, so the left image is stretched and sheared into a long triangle. The automatic homography is constrained by matches
+  spread over the whole overlap, and the result looks like a real panorama with no visible seams. The cross-check table below shows the same thing in numbers: the automatic homography explains my clicks to within a few pixels,
+  but the manual one misses the automatic inliers of the building pair 0 &rarr; 1 by about 29 px.
+</p>
+
+<table>
+  <caption>Mean reprojection error (px) of each homography on the other method's points. "Manual H" is fitted to my clicks, "Auto H" to the RANSAC inliers.</caption>
+  <tr><th>pair</th><th>my clicks (n)</th><th>manual H on clicks</th><th>auto H on clicks</th><th>auto inliers (n)</th><th>auto H on inliers</th><th>manual H on inliers</th></tr>
+  <tr><td>Building 0 &rarr; 1</td><td>8</td><td>1.82</td><td>3.53</td><td>40</td><td>1.31</td><td>28.62</td></tr>
+  <tr><td>Building 1 &rarr; 2</td><td>8</td><td>0.53</td><td>1.57</td><td>64</td><td>1.21</td><td>2.27</td></tr>
+  <tr><td>Waterloo Park 0 &rarr; 1</td><td>5</td><td>0.13</td><td>0.62</td><td>54</td><td>0.63</td><td>5.65</td></tr>
+  <tr><td>Waterloo Park 1 &rarr; 2</td><td>12</td><td>1.41</td><td>2.45</td><td>34</td><td>0.88</td><td>1.36</td></tr>
+</table>
+
+<p>The lake mosaics look much more alike. The photos are dominated by distant scenery, so even clicks along a thin strip (pair 0 &rarr; 1 covers only 9% &times; 4% of the image) get the rotation roughly right, although the manual homography is still
+  5.7 px off on the automatic inliers there. In both versions the shoreline and the buildings line up with no visible seam at this scale; the main difference is a slightly different tilt and framing, since the two sets of homographies are not identical.
+  Where the clicks were better spread (pair 1 &rarr; 2) each homography explains the other's points to within about 1.4&ndash;2.5 px. The real advantage of the automatic method is therefore not a better result when I click carefully, but that it is much
+  less likely to go wrong when I don't, it scales to hundreds of points per pair, and it took no clicking at all.
+</p>
+
+<h2 id="appendix">Appendix</h2>
+
+<p>Everything that is not needed to follow the main story lives here: the code, the parameters, the second image set for each part, and the remaining figures. The homographies and the systems of equations that the assignment asks for are in the main text.</p>
+
+<ul class="appendix-toc">
+  <li><a href="#app-a">A. Part One: code</a> (homography, warping, rectification, blending)</li>
+  <li><a href="#app-b">B. Part One: Waterloo Park</a> (manual correspondences, homographies and mosaics)</li>
+  <li><a href="#app-c">C. Part Two: code</a> (Harris, ANMS, descriptors, matching, RANSAC, cylindrical projection)</li>
+  <li><a href="#app-d">D. Part Two: parameters</a></li>
+  <li><a href="#app-e">E. Part Two: Waterloo Park</a> (remaining figures, second mosaic piece, cylindrical panorama)</li>
+  <li><a href="#app-f">F. Part Two: UW campus building</a> (all figures and the automatic mosaic)</li>
+</ul>
+
+<div class="appendix">
+<h3 id="app-a">A. Part One: code</h3>
+
+<h4>A.2 Recovering homographies</h4>
+
+<details class="code-block"><summary>Show system-of-equations (build_system) implementation</summary><pre><code>
+def build_system(p1, p2):
+    """
+    n point pairs -&gt; the linear system A h = b for the 8 unknowns of H = [[a b c],[d e f],[g h 1]].
+
+        x' = (a x + b y + c) / (g x + h y + 1),   y' = (d x + e y + f) / (g x + h y + 1)
+
+    Multiply by the denominator and move the unknowns left; the equations become LINEAR:
+
+        a x + b y + c           - g x x' - h y x' = x'
+                  d x + e y + f - g x y' - h y y' = y'
+
+    Each correspondence gives 2 rows, so we need n &gt;= 4 points (H has 8 degrees of freedom).
+    """
+    p1, p2 = np.asarray(p1, float), np.asarray(p2, float)
+    n = len(p1)
+    A, b = np.zeros((2 * n, 8)), np.zeros(2 * n)
+    x, y, xp, yp = p1[:, 0], p1[:, 1], p2[:, 0], p2[:, 1]
+    A[0::2, 0], A[0::2, 1], A[0::2, 2], A[0::2, 6], A[0::2, 7] = x, y, 1, -x * xp, -y * xp
+    A[1::2, 3], A[1::2, 4], A[1::2, 5], A[1::2, 6], A[1::2, 7] = x, y, 1, -x * yp, -y * yp
+    b[0::2], b[1::2] = xp, yp
+    return A, b
+</code></pre></details>
+<details class="code-block"><summary>Show homography implementation</summary><pre><code>
+def computeH(im1_pts, im2_pts):
+    """
+    H = computeH(im1_pts, im2_pts): n-by-2 arrays of (x, y), returns 3x3 H with p2 ~ H p1.
+
+    With exactly 4 points the system is square and solved exactly, but any click error
+    goes straight into H. With more points the system is OVERDETERMINED, so we solve it
+    in the least-squares sense (minimise ||A h - b||^2), which averages out the noise.
+    """
+    p1, p2 = np.asarray(im1_pts, float), np.asarray(im2_pts, float)
+    assert p1.shape == p2.shape and len(p1) >= 4, "need >= 4 matching points"
+    q1, T1 = _normalize(p1)
+    q2, T2 = _normalize(p2)
+    A, b = build_system(q1, q2)
+    h, *_ = np.linalg.lstsq(A, b, rcond=None)
+    Hn = np.append(h, 1.0).reshape(3, 3)
+    H = np.linalg.inv(T2) @ Hn @ T1          # undo the normalisation
+    return H / H[2, 2]
+</code></pre></details>
+<h4>A.3 Warping and rectification</h4>
+
+<details class="code-block"><summary>Show rectification implementation (setup and warps)</summary><pre><code>
+def rectify(job, quad, outdir):
+    """Homography that sends 4 clicked corners of a real-world rectangle to a true rectangle; everything
+    on that plane then looks as if the camera pointed straight at it. quad order: TL, TR, BR, BL."""
+    im = load_image(job["image"])
+    aspect, rect_h, margin = job.get("aspect", 1.0), job.get("rect_h", 500), job.get("margin", 0.35)
+    rect_w = rect_h * aspect
+    dst = np.array([[0, 0], [rect_w, 0], [rect_w, rect_h], [0, rect_h]], float)
+    H = computeH(quad, dst)
+    mx, my = margin * rect_w, margin * rect_h
+    bbox = (int(-mx), int(-my), int(rect_w + mx), int(rect_h + my))
+    nn, m_nn, _ = warpImageNearestNeighbor(im, H, bbox)
+    bl, m_bl, _ = warpImageBilinear(im, H, bbox)
+    ...  # timing, saving the images and the comparison figures are omitted here
+</code></pre></details>
+<details class="code-block"><summary>Show inverse warping implementation</summary><pre><code>
+def output_bbox(shape, H):
+    h, w = shape[:2]
+    corners = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], float)
+    c = apply_H(H, corners)
+    return (int(np.floor(c[:, 0].min())), int(np.floor(c[:, 1].min())),
+            int(np.ceil(c[:, 0].max())), int(np.ceil(c[:, 1].max())))
+ 
+ 
+def _inverse_map(shape, H, bbox):
+    xmin, ymin, xmax, ymax = bbox
+    xs, ys = np.meshgrid(np.arange(xmin, xmax + 1), np.arange(ymin, ymax + 1))
+    P = np.stack([xs.ravel(), ys.ravel(), np.ones(xs.size)])      # 3 x N
+    Hinv = np.linalg.inv(H)
+    S = Hinv @ P
+    d = S[2]
+    # Guard against the "behind the camera" mirror: for big rotations the denominator
+    # can change sign, and those pixels would wrongly map back into the image.
+    h, w = shape[:2]
+    cw = (H @ np.array([w / 2, h / 2, 1.0]))[2]                  # w' at the image centre
+    ok_sign = (d * cw) > 1e-9 * np.abs(cw)
+    d_safe = np.where(ok_sign, d, 1.0)
+    sx, sy = S[0] / d_safe, S[1] / d_safe
+    out_shape = (ymax - ymin + 1, xmax - xmin + 1)
+    return sx, sy, ok_sign, out_shape
+</code></pre></details>
+<details class="code-block"><summary>Show nearest neighbour warp implementation</summary><pre><code>
+def warpImageNearestNeighbor(im, H, bbox=None):
+    """Round to the closest source pixel. Returns (warped, mask, (xmin, ymin)); mask = 1 where real data."""
+    bbox = bbox or output_bbox(im.shape, H)
+    sx, sy, ok, (oh, ow) = _inverse_map(im.shape, H, bbox)
+    h, w = im.shape[:2]
+    xi, yi = np.rint(sx).astype(np.int64), np.rint(sy).astype(np.int64)
+    valid = ok &amp; (xi &gt;= 0) &amp; (xi &lt; w) &amp; (yi &gt;= 0) &amp; (yi &lt; h)
+    out = np.zeros((oh * ow,) + im.shape[2:], im.dtype)
+    out[valid] = im[yi[valid], xi[valid]]
+    return out.reshape((oh, ow) + im.shape[2:]), valid.reshape(oh, ow).astype(np.float32), bbox[:2]
+</code></pre></details>
+<details class="code-block"><summary>Show bilinear warp implementation</summary><pre><code>
+def warpImageBilinear(im, H, bbox=None):
+    """Weighted average of the 4 surrounding pixels:
+    I(x,y) = (1-dx)(1-dy) I00 + dx(1-dy) I10 + (1-dx)dy I01 + dx dy I11."""
+    bbox = bbox or output_bbox(im.shape, H)
+    sx, sy, ok, (oh, ow) = _inverse_map(im.shape, H, bbox)
+    h, w = im.shape[:2]
+    valid = ok &amp; (sx &gt;= 0) &amp; (sx &lt;= w - 1) &amp; (sy &gt;= 0) &amp; (sy &lt;= h - 1)
+    x, y = np.clip(sx[valid], 0, w - 1), np.clip(sy[valid], 0, h - 1)
+    x0, y0 = np.minimum(np.floor(x).astype(np.int64), w - 2), np.minimum(np.floor(y).astype(np.int64), h - 2)
+    dx, dy = x - x0, y - y0
+    if im.ndim == 3:
+        dx, dy = dx[:, None], dy[:, None]
+    vals = ((1 - dx) * (1 - dy) * im[y0, x0] + dx * (1 - dy) * im[y0, x0 + 1] +
+            (1 - dx) * dy * im[y0 + 1, x0] + dx * dy * im[y0 + 1, x0 + 1])
+    out = np.zeros((oh * ow,) + im.shape[2:], im.dtype)
+    out[valid] = vals
+    return out.reshape((oh, ow) + im.shape[2:]), valid.reshape(oh, ow).astype(np.float32), bbox[:2]
+</code></pre></details>
+<h4>A.4 Blending into a mosaic</h4>
+
+<details class="code-block"><summary>Show homography chaining (homographies_to_reference) implementation</summary><pre><code>
+def homographies_to_reference(Hpair, idxs, ref):
+    """Chain neighbouring homographies so every image maps into the reference image's frame
+    (matrix products going one way, inverses the other). The middle image keeps stretching small."""
+    out = {ref: np.eye(3)}
+    for i in range(ref - 1, idxs[0] - 1, -1):
+        out[i] = out[i + 1] @ Hpair[i]
+    for i in range(ref + 1, idxs[-1] + 1):
+        out[i] = out[i - 1] @ np.linalg.inv(Hpair[i - 1])
+    return {k: v / v[2, 2] for k, v in out.items()}
+</code></pre></details>
+<details class="code-block"><summary>Show feather weight implementation</summary><pre><code>
+def feather_weight(shape):
+    """Distance to the nearest image border, normalised: 0 at the edge, 1 at the centre."""
+    h, w = shape[:2]
+    d = distance_transform_edt(np.pad(np.ones((h, w)), 1))[1:-1, 1:-1]
+    return (d / d.max()).astype(np.float32)
+</code></pre></details>
+<details class="code-block"><summary>Show blending (feather + 2-band) implementation</summary><pre><code>
+def build_mosaic(imgs, idxs, Hs, max_dim=None, sigma=None):
+    """Warp the images into one canvas and blend two ways in one pass:
+    feather (weighted average by distance-to-border), and
+    twoband (low frequencies feathered with a blurred weight; high frequencies from the single image
+    with the largest weight, so edges cannot ghost)."""
+    max_dim = max_dim or CANVAS_MAX
+    boxes = np.array([output_bbox(imgs[i].shape, Hs[i]) for i in idxs])
+    span = max(boxes[:, 2].max() - boxes[:, 0].min(), boxes[:, 3].max() - boxes[:, 1].min())
+    s = min(1.0, max_dim / span)
+    Hs = {i: np.diag([s, s, 1.0]) @ Hs[i] for i in idxs}
+    boxes = np.array([output_bbox(imgs[i].shape, Hs[i]) for i in idxs])
+    bbox = (boxes[:, 0].min(), boxes[:, 1].min(), boxes[:, 2].max(), boxes[:, 3].max())
+    oh, ow = bbox[3] - bbox[1] + 1, bbox[2] - bbox[0] + 1
+    sigma, eps = sigma or max(3.0, ow / 300.0), 1e-8
+
+    f_num, f_den = np.zeros((oh, ow, 3), np.float32), np.zeros((oh, ow), np.float32)
+    l_num, l_den = np.zeros((oh, ow, 3), np.float32), np.zeros((oh, ow), np.float32)
+    hi_sel, best, cover = np.zeros((oh, ow, 3), np.float32), np.zeros((oh, ow), np.float32), np.zeros((oh, ow), np.float32)
+    for i in idxs:
+        warped, mask, _ = warpImageBilinear(np.dstack([imgs[i], feather_weight(imgs[i].shape)]), Hs[i], bbox)
+        rgb, w = warped[..., :3], warped[..., 3] * mask
+        f_num += w[..., None] * rgb; f_den += w
+        low = gaussian_filter(rgb * mask[..., None], (sigma, sigma, 0)) / (gaussian_filter(mask, sigma)[..., None] + eps)
+        wb = gaussian_filter(w, sigma)
+        l_num += wb[..., None] * low; l_den += wb
+        sel = w &gt; best
+        hi_sel[sel] = (rgb - low)[sel]; best[sel] = w[sel]
+        cover = np.maximum(cover, mask)
+    feather = np.where(f_den[..., None] &gt; 1e-6, f_num / np.maximum(f_den[..., None], eps), 0)
+    twoband = np.where(l_den[..., None] &gt; 1e-6, l_num / np.maximum(l_den[..., None], eps) + hi_sel, 0)
+    out = {"feather": feather, "twoband": twoband}
+    return {k: np.where(cover[..., None] &gt; 0, np.clip(v, 0, 1), 0).astype(np.float32) for k, v in out.items()}
+</code></pre></details>
+<h3 id="app-b">B. Part One: Waterloo Park (lake_a)</h3>
+
+<p>The Waterloo Park photos, stitched by hand. These are the clicked correspondences, the systems of equations and the recovered homographies for every pair, followed by the two manual mosaic pieces.</p>
+
+<h4>Correspondences, systems of equations and homographies</h4>
 
 <details class="code-block">
 <summary>Show full system of equations + H for every pair</summary>
@@ -406,7 +1012,10 @@ reprojection error: mean 0.28 px, max 0.54 px
 
 <h5>pair 0 &rarr; 1: 5 points, mean reprojection error 0.13 px (max 0.23)</h5>
 
-<img src='out/lake_a/corr_0_1.jpg'>
+<figure>
+  <img src="out/lake_a/corr_0_1.jpg" alt="Waterloo Park, pair 0 → 1: the 5 clicked correspondences on image 0 (left) and image 1 (right)" loading="lazy">
+  <figcaption>Waterloo Park, pair 0 &rarr; 1: the 5 clicked correspondences on image 0 (left) and image 1 (right).</figcaption>
+</figure>
 
 <pre>H =
 [[    2.10252    -0.13634 -1151.46162]
@@ -415,7 +1024,10 @@ reprojection error: mean 0.28 px, max 0.54 px
 
  <h5>pair 1 &rarr; 2: 12 points, mean reprojection error 1.41 px (max 2.72)</h5>
 
-<img src='out/lake_a/corr_1_2.jpg'>
+<figure>
+  <img src="out/lake_a/corr_1_2.jpg" alt="Waterloo Park, pair 1 → 2: the 12 clicked correspondences on image 1 (left) and image 2 (right)" loading="lazy">
+  <figcaption>Waterloo Park, pair 1 &rarr; 2: the 12 clicked correspondences on image 1 (left) and image 2 (right).</figcaption>
+</figure>
 
 <pre>H =
 [[    4.04270    -0.10631 -3215.37353]
@@ -423,452 +1035,405 @@ reprojection error: mean 0.28 px, max 0.54 px
  [    0.00219    -0.00008     1.00000]]</pre>
 <h5>pair 2 &rarr; 3: 5 points, mean reprojection error 0.28 px (max 0.54)</h5>
 
-<img src='out/lake_a/corr_2_3.jpg'>
+<figure>
+  <img src="out/lake_a/corr_2_3.jpg" alt="Waterloo Park, pair 2 → 3: the 5 clicked correspondences on image 2 (left) and image 3 (right)" loading="lazy">
+  <figcaption>Waterloo Park, pair 2 &rarr; 3: the 5 clicked correspondences on image 2 (left) and image 3 (right).</figcaption>
+</figure>
 
 <pre>H =
 [[    2.68489    -0.06262 -1800.19093]
  [    0.66278     2.13964  -627.69380]
  [    0.00120    -0.00007     1.00000]]</pre>
 
-<p> For each adjacent image pair, a homography was estimated using manually selected
-correspondences. The homography parameters were obtained by solving the linear
-system A h = b using least-squares on Hartley-normalized coordinates.
+
+<h4>Manual mosaics (two pieces)</h4>
+<p>Since all four images cannot fit in one flat mosaic, they are split into two overlapping pieces. Before building each mosaic, the code checks every warped image: 
+  all of it must stay in front of the virtual camera, and its area cannot grow or shrink by more than a factor of 6. With a single plane as the projection surface, 
+  images far from the reference are stretched enormously (and eventually land "behind" the camera), so this check fails when all four images are combined. The code then 
+  greedily takes the longest run of consecutive images that passes, builds a mosaic from it, and starts the next piece at that run's last image, so neighbouring pieces 
+  overlap by one image. A cylindrical or spherical projection would be needed to get a single seamless panorama.
 </p>
 
-<p>The reprojection error reported for each pair is the distance, in pixels, between H applied to a clicked point in image 1 and the point I clicked for it in image 2, averaged (or maximized) over all correspondences. It measures how well a single homography explains all of my clicks, so it reflects both click accuracy and how well the planar / fixed-centre-of-projection assumption holds. It should be read with the point count in mind: 5 points give 10 equations for 8 unknowns, so the fit is barely overdetermined and a low error is partly guaranteed. Pairs with more, well-spread points give a more trustworthy number.</p>
-
-
-<h3>A.3 Warp the Images</h3>
-
-<p> Now that we've computed the homography matrix, how does this exactly translate to putting two images with the same 
-  features together? If we simply mapped the coordinates to compute the homography matrix, we'd end up with 
-  holes in the output image, as the pixels in the warped image would not be filled in. To solve this, we can use inverse warping, where 
-  we iterate over each pixel in the output image and use the inverse of the homography matrix to find the corresponding pixel in 
-  the input image.
-</p>
-
-<p> Before warping, we take the four image corners, i.e. (0,0), (w,0), (0,h), (w,h), and apply the homography matrix to find the new corners 
-  of the warped image. This allows us to determine the size of the output image and create a grid of pixel coordinates for the output 
-  image. We then apply the inverse homography matrix to each pixel coordinate in the output image to find the corresponding 
-  pixel coordinate in the input image. Finally, we use interpolation to fill in the pixel values in the output image.
-</p>
-
-<p>Not every output pixel has data: some map back to a location outside the source image, or land "behind the camera", where the denominator of the homography changes sign and the mapping is meaningless. Rather than treating these black pixels as real, each warp also returns a binary alpha mask (1 where real data exists, 0 elsewhere). The mask is used when comparing the two interpolation methods (only pixels filled by both are compared) and later when blending. I treat (0,0) as the centre of the first pixel, so valid source coordinates run from 0 to w-1 and 0 to h-1. Bilinear interpolation needs all four neighbours, so it only keeps coordinates inside that range, while nearest neighbour keeps any coordinate that rounds to a valid pixel.</p>
-
-<p>To test if our warping implementation is correct, we can rectify objects that are known to be rectangles in the real world and check that they come out rectangular. The
-  warping algorithm maps each output pixel back into the source image, and since the source coordinates it lands on are usually fractional, we'll use
-  interpolation methods to assign values to the output pixels. Nearest neighbour interpolation is the 
-  simplest form of interpolation, where we simply take the value of the nearest pixel in the input image. Bilinear interpolation, on the 
-  other hand, takes a weighted average of the four nearest pixels in the input image, which results in a smoother output image.
-</p>
-
-<p>For each rectification, I clicked the four corners (top-left, top-right, bottom-right, bottom-left) of an object that is a rectangle in real life, and defined the destination points by hand as a true rectangle, 500 px tall and 750 px wide (an assumed aspect ratio of 1.5). <code>computeH</code> maps the clicked quadrilateral onto that rectangle, and everything lying on the same plane then appears as if the camera had been pointed straight at it. A 35% margin is kept around the rectangle so the surrounding scene stays visible. Because the aspect ratio is assumed, a wrong guess shows up as a squashed or stretched rectangle rather than as a failure of the homography.</p>
-
-<details class="code-block"><summary>Show rectification implementation (setup and warps)</summary><pre><code>
-def rectify(job, quad, outdir):
-    """Homography that sends 4 clicked corners of a real-world rectangle to a true rectangle; everything
-    on that plane then looks as if the camera pointed straight at it. quad order: TL, TR, BR, BL."""
-    im = load_image(job["image"])
-    aspect, rect_h, margin = job.get("aspect", 1.0), job.get("rect_h", 500), job.get("margin", 0.35)
-    rect_w = rect_h * aspect
-    dst = np.array([[0, 0], [rect_w, 0], [rect_w, rect_h], [0, rect_h]], float)
-    H = computeH(quad, dst)
-    mx, my = margin * rect_w, margin * rect_h
-    bbox = (int(-mx), int(-my), int(rect_w + mx), int(rect_h + my))
-    nn, m_nn, _ = warpImageNearestNeighbor(im, H, bbox)
-    bl, m_bl, _ = warpImageBilinear(im, H, bbox)
-    ...  # timing, saving the images and the comparison figures are omitted here
-</code></pre></details>
-
-<p>I've made two rectifications below on the UW Campus photos. Run times are shown in the table below.</p>
-
-<table>
-  <tr><th>rectification</th><th>NN time</th><th>bilinear time</th><th>bilinear / NN</th></tr>
-  <tr><td>building_rect_1</td><td>132 ms</td><td>436 ms</td><td>3.3x</td></tr>
-  <tr><td>building_rect_2</td><td>139 ms</td><td>425 ms</td><td>3.1x</td></tr>
-</table>
-
-
-<h4>building_rect_1 <small>(Photoshoot/IMG_7647.jpeg)</small></h4>
-<img src='out/rectify/building_rect_1_compare.jpg'>
-<img src='out/rectify/building_rect_1_zoom.jpg'>
-
-<details class="code-block">
-<summary>Show system of equations and H</summary>
-<pre><code>
-rectification 'building_rect_1'  (Photoshoot/IMG_7647.jpeg, working size [1400, 1050])
-clicked corners TL,TR,BR,BL (x,y):
-[[851.4 588.7]
- [891.6 592.7]
- [900.4 720.0]
- [856.7 721.8]]
-target rectangle 750 x 500:
-[[  0.0   0.0]
- [750.0   0.0]
- [750.0 500.0]
- [  0.0 500.0]]
-
-linear system A h = b:
-A =
-[[    851.4     588.7       1.0       0.0       0.0       0.0      -0.0      -0.0]
- [      0.0       0.0       0.0     851.4     588.7       1.0      -0.0      -0.0]
- [    891.6     592.7       1.0       0.0       0.0       0.0 -668700.0 -444525.0]
- [      0.0       0.0       0.0     891.6     592.7       1.0      -0.0      -0.0]
- [    900.4     720.0       1.0       0.0       0.0       0.0 -675300.0 -540000.0]
- [      0.0       0.0       0.0     900.4     720.0       1.0 -450200.0 -360000.0]
- [    856.7     721.8       1.0       0.0       0.0       0.0      -0.0      -0.0]
- [      0.0       0.0       0.0     856.7     721.8       1.0 -428350.0 -360900.0]]
-b = [  0.0   0.0 750.0   0.0 750.0 500.0   0.0 500.0]
-
-H =
-[[   11.911655    -0.474318 -9862.352000]
- [   -0.273575     2.749433 -1385.669273]
- [   -0.000752     0.000517     1.000000]]
-max reprojection error on the 4 corners = 3.07e-12 px
-warp time: nearest 132 ms, bilinear 436 ms
-
-</code></pre></details>
-
-<h4>building_rect_2 <small>(Photoshoot/IMG_7648.jpeg)</small></h4>
-<img src='out/rectify/building_rect_2_compare.jpg'>
-<img src='out/rectify/building_rect_2_zoom.jpg'>
-
-<details class="code-block">
-<summary>Show system of equations and H</summary>
-<pre><code>
-
-rectification 'building_rect_2'  (Photoshoot/IMG_7648.jpeg, working size [1400, 1050])
-clicked corners TL,TR,BR,BL (x,y):
-[[1356.7  648.4]
- [1369.6  648.7]
- [1369.3  664.4]
- [1357.6  664.4]]
-target rectangle 750 x 500:
-[[  0.0   0.0]
- [750.0   0.0]
- [750.0 500.0]
- [  0.0 500.0]]
-
-linear system A h = b:
-A =
-[[    1356.7      648.4        1.0        0.0        0.0        0.0       -0.0       -0.0]
- [       0.0        0.0        0.0     1356.7      648.4        1.0       -0.0       -0.0]
- [    1369.6      648.7        1.0        0.0        0.0        0.0 -1027200.0  -486525.0]
- [       0.0        0.0        0.0     1369.6      648.7        1.0       -0.0       -0.0]
- [    1369.3      664.4        1.0        0.0        0.0        0.0 -1026975.0  -498300.0]
- [       0.0        0.0        0.0     1369.3      664.4        1.0  -684650.0  -332200.0]
- [    1357.6      664.4        1.0        0.0        0.0        0.0       -0.0       -0.0]
- [       0.0        0.0        0.0     1357.6      664.4        1.0  -678800.0  -332200.0]]
-b = [  0.0   0.0 750.0   0.0 750.0 500.0   0.0 500.0]
-
-H =
-[[     8.750596     -0.492221 -11552.778001]
- [    -0.101058      4.345499  -2680.516011]
- [    -0.000202     -0.000883      1.000000]]
-max reprojection error on the 4 corners = 1.10e-11 px
-warp time: nearest 139 ms, bilinear 425 ms
-
-</code></pre></details>
-
-<h4>Speed vs quality</h4>
-<p>Bilinear took about 3.1-3.3x as long as nearest neighbour (4 reads and ~10 multiply-adds per channel instead of 1 read). In exchange it removes blocky staircase edges and 
-  pixel-doubling when the warp enlarges the image (zoom panels), at the cost of slight blur. When the warp shrinks the image both can alias, since neither averages over 
-  a footprint.</p>
-
-
-<details class="code-block"><summary>Show inverse warping implementation</summary><pre><code>
-def output_bbox(shape, H):
-    h, w = shape[:2]
-    corners = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], float)
-    c = apply_H(H, corners)
-    return (int(np.floor(c[:, 0].min())), int(np.floor(c[:, 1].min())),
-            int(np.ceil(c[:, 0].max())), int(np.ceil(c[:, 1].max())))
- 
- 
-def _inverse_map(shape, H, bbox):
-    xmin, ymin, xmax, ymax = bbox
-    xs, ys = np.meshgrid(np.arange(xmin, xmax + 1), np.arange(ymin, ymax + 1))
-    P = np.stack([xs.ravel(), ys.ravel(), np.ones(xs.size)])      # 3 x N
-    Hinv = np.linalg.inv(H)
-    S = Hinv @ P
-    d = S[2]
-    # Guard against the "behind the camera" mirror: for big rotations the denominator
-    # can change sign, and those pixels would wrongly map back into the image.
-    h, w = shape[:2]
-    cw = (H @ np.array([w / 2, h / 2, 1.0]))[2]                  # w' at the image centre
-    ok_sign = (d * cw) > 1e-9 * np.abs(cw)
-    d_safe = np.where(ok_sign, d, 1.0)
-    sx, sy = S[0] / d_safe, S[1] / d_safe
-    out_shape = (ymax - ymin + 1, xmax - xmin + 1)
-    return sx, sy, ok_sign, out_shape
-</code></pre></details>
-
-<details class="code-block"><summary>Show nearest neighbour warp implementation</summary><pre><code>
-def warpImageNearestNeighbor(im, H, bbox=None):
-    """Round to the closest source pixel. Returns (warped, mask, (xmin, ymin)); mask = 1 where real data."""
-    bbox = bbox or output_bbox(im.shape, H)
-    sx, sy, ok, (oh, ow) = _inverse_map(im.shape, H, bbox)
-    h, w = im.shape[:2]
-    xi, yi = np.rint(sx).astype(np.int64), np.rint(sy).astype(np.int64)
-    valid = ok &amp; (xi &gt;= 0) &amp; (xi &lt; w) &amp; (yi &gt;= 0) &amp; (yi &lt; h)
-    out = np.zeros((oh * ow,) + im.shape[2:], im.dtype)
-    out[valid] = im[yi[valid], xi[valid]]
-    return out.reshape((oh, ow) + im.shape[2:]), valid.reshape(oh, ow).astype(np.float32), bbox[:2]
-</code></pre></details>
-
-<details class="code-block"><summary>Show bilinear warp implementation</summary><pre><code>
-def warpImageBilinear(im, H, bbox=None):
-    """Weighted average of the 4 surrounding pixels:
-    I(x,y) = (1-dx)(1-dy) I00 + dx(1-dy) I10 + (1-dx)dy I01 + dx dy I11."""
-    bbox = bbox or output_bbox(im.shape, H)
-    sx, sy, ok, (oh, ow) = _inverse_map(im.shape, H, bbox)
-    h, w = im.shape[:2]
-    valid = ok &amp; (sx &gt;= 0) &amp; (sx &lt;= w - 1) &amp; (sy &gt;= 0) &amp; (sy &lt;= h - 1)
-    x, y = np.clip(sx[valid], 0, w - 1), np.clip(sy[valid], 0, h - 1)
-    x0, y0 = np.minimum(np.floor(x).astype(np.int64), w - 2), np.minimum(np.floor(y).astype(np.int64), h - 2)
-    dx, dy = x - x0, y - y0
-    if im.ndim == 3:
-        dx, dy = dx[:, None], dy[:, None]
-    vals = ((1 - dx) * (1 - dy) * im[y0, x0] + dx * (1 - dy) * im[y0, x0 + 1] +
-            (1 - dx) * dy * im[y0 + 1, x0] + dx * dy * im[y0 + 1, x0 + 1])
-    out = np.zeros((oh * ow,) + im.shape[2:], im.dtype)
-    out[valid] = vals
-    return out.reshape((oh, ow) + im.shape[2:]), valid.reshape(oh, ow).astype(np.float32), bbox[:2]
-</code></pre></details>
-
-<h3>A.4 Blend the Images into a Mosaic</h3>
-
-<p>Okay, so now we have accounted for what's happening at each pixel in the final panorama, except that the overlapping parts
-  now have two pixel values, one from each image. How do we decide which one to use? We can use a simple approach of taking 
-  the average of the two pixel values, but this can result in visible seams in the final panorama. A better approach is to use 
-  a weighted average, where we give more weight to the pixels that are closer to the centre of the image and less weight to the 
-  pixels that are closer to the edges. This results in a smoother transition between the two images and reduces visible seams.
-</p>
-
-<p>Below, I've shown two blending techniques. <i>Feathering</i> takes the weighted average at every pixel; the <i>2-band</i> 
-  blend feathers only the low frequencies and takes high frequencies from one image per pixel, which removes ghosting.
-</p>
-
-<h4>Procedure</h4>
-<ol>
-  <li><b>Choose a reference.</b> The middle image of each run is the reference. Every other image is mapped into its frame by chaining the pairwise homographies: images on one side multiply the pair homographies toward the reference, images on the other side use their inverses. Using the middle image keeps the outer images from being stretched too much.</li>
-  <li><b>Size the canvas.</b> Every image's four corners are pushed through its homography and the union of the bounding boxes becomes the canvas. If the longest side exceeds 2400 px, everything is scaled down.</li>
-  <li><b>Warp.</b> Each image is inverse-warped onto the canvas with bilinear interpolation, together with its alpha mask and its feathering weight.</li>
-  <li><b>Feather.</b> The weight of a pixel is its distance to the nearest image border (a distance transform), normalized to 0 at the edge and 1 at the centre. The feathered mosaic is the weighted average sum(w &middot; I) / sum(w) at every pixel.</li>
-  <li><b>2-band blend.</b> Each warped image is split into a low-frequency part (Gaussian blur, normalized by the blurred mask so empty black pixels do not bleed in) and a high-frequency part (image minus low-pass). The low frequencies are blended with blurred weights, while the high frequencies come from whichever image has the largest weight at that pixel. This is a 2-level pyramid, as suggested in the assignment.</li>
-</ol>
-
-<p>In general, feathering hides exposure differences between images well, but any misalignment (from click error or from the scene not being planar) is averaged into a ghost. The 2-band blend keeps each edge from a single image, so ghosting disappears; however, a leftover misalignment can then appear as a visible seam instead of a blur.</p>
-
-<details class="code-block"><summary>Show homography chaining (homographies_to_reference) implementation</summary><pre><code>
-def homographies_to_reference(Hpair, idxs, ref):
-    """Chain neighbouring homographies so every image maps into the reference image's frame
-    (matrix products going one way, inverses the other). The middle image keeps stretching small."""
-    out = {ref: np.eye(3)}
-    for i in range(ref - 1, idxs[0] - 1, -1):
-        out[i] = out[i + 1] @ Hpair[i]
-    for i in range(ref + 1, idxs[-1] + 1):
-        out[i] = out[i - 1] @ np.linalg.inv(Hpair[i - 1])
-    return {k: v / v[2, 2] for k, v in out.items()}
-</code></pre></details>
-
-<details class="code-block"><summary>Show feather weight implementation</summary><pre><code>
-def feather_weight(shape):
-    """Distance to the nearest image border, normalised: 0 at the edge, 1 at the centre."""
-    h, w = shape[:2]
-    d = distance_transform_edt(np.pad(np.ones((h, w)), 1))[1:-1, 1:-1]
-    return (d / d.max()).astype(np.float32)
-</code></pre></details>
-
-<details class="code-block"><summary>Show blending (feather + 2-band) implementation</summary><pre><code>
-def build_mosaic(imgs, idxs, Hs, max_dim=None, sigma=None):
-    """Warp the images into one canvas and blend two ways in one pass:
-    feather (weighted average by distance-to-border), and
-    twoband (low frequencies feathered with a blurred weight; high frequencies from the single image
-    with the largest weight, so edges cannot ghost)."""
-    max_dim = max_dim or CANVAS_MAX
-    boxes = np.array([output_bbox(imgs[i].shape, Hs[i]) for i in idxs])
-    span = max(boxes[:, 2].max() - boxes[:, 0].min(), boxes[:, 3].max() - boxes[:, 1].min())
-    s = min(1.0, max_dim / span)
-    Hs = {i: np.diag([s, s, 1.0]) @ Hs[i] for i in idxs}
-    boxes = np.array([output_bbox(imgs[i].shape, Hs[i]) for i in idxs])
-    bbox = (boxes[:, 0].min(), boxes[:, 1].min(), boxes[:, 2].max(), boxes[:, 3].max())
-    oh, ow = bbox[3] - bbox[1] + 1, bbox[2] - bbox[0] + 1
-    sigma, eps = sigma or max(3.0, ow / 300.0), 1e-8
-
-    f_num, f_den = np.zeros((oh, ow, 3), np.float32), np.zeros((oh, ow), np.float32)
-    l_num, l_den = np.zeros((oh, ow, 3), np.float32), np.zeros((oh, ow), np.float32)
-    hi_sel, best, cover = np.zeros((oh, ow, 3), np.float32), np.zeros((oh, ow), np.float32), np.zeros((oh, ow), np.float32)
-    for i in idxs:
-        warped, mask, _ = warpImageBilinear(np.dstack([imgs[i], feather_weight(imgs[i].shape)]), Hs[i], bbox)
-        rgb, w = warped[..., :3], warped[..., 3] * mask
-        f_num += w[..., None] * rgb; f_den += w
-        low = gaussian_filter(rgb * mask[..., None], (sigma, sigma, 0)) / (gaussian_filter(mask, sigma)[..., None] + eps)
-        wb = gaussian_filter(w, sigma)
-        l_num += wb[..., None] * low; l_den += wb
-        sel = w &gt; best
-        hi_sel[sel] = (rgb - low)[sel]; best[sel] = w[sel]
-        cover = np.maximum(cover, mask)
-    feather = np.where(f_den[..., None] &gt; 1e-6, f_num / np.maximum(f_den[..., None], eps), 0)
-    twoband = np.where(l_den[..., None] &gt; 1e-6, l_num / np.maximum(l_den[..., None], eps) + hi_sel, 0)
-    out = {"feather": feather, "twoband": twoband}
-    return {k: np.where(cover[..., None] &gt; 0, np.clip(v, 0, 1), 0).astype(np.float32) for k, v in out.items()}
-</code></pre></details>
-
-<h4>UW Campus Building</h4>
-<img src='out/building/mosaic_comparison.jpg'>
-
-<h4>Waterloo Park - park side</h4>
-<p>Since all four images cannot fit in one flat mosaic, they are split into two overlapping pieces. Before building each mosaic, the code checks every warped image: all of it must stay in front of the virtual camera, and its area cannot grow or shrink by more than a factor of 6. With a single plane as the projection surface, images far from the reference are stretched enormously (and eventually land "behind" the camera), so this check fails when all four images are combined. The code then greedily takes the longest run of consecutive images that passes, builds a mosaic from it, and starts the next piece at that run's last image, so neighbouring pieces overlap by one image. A cylindrical or spherical projection would be needed to get a single seamless panorama.</p>
-
-<img src='out/lake_a/mosaic_p0_comparison.jpg'>
-<img src='out/lake_a/mosaic_p1_comparison.jpg'>
+<figure>
+  <img src="out/lake_a/mosaic_p0_comparison.jpg" alt="Waterloo Park mosaic, piece 1 (images 0–2) from the manual correspondences: source images, feathered blend and 2-band blend" loading="lazy">
+  <figcaption>Waterloo Park mosaic, piece 1 (images 0&ndash;2) from the manual correspondences: source images, feathered blend and 2-band blend.</figcaption>
+</figure>
+<figure>
+  <img src="out/lake_a/mosaic_p1_comparison.jpg" alt="Waterloo Park mosaic, piece 2 (images 2–3) from the manual correspondences: source images, feathered blend and 2-band blend" loading="lazy">
+  <figcaption>Waterloo Park mosaic, piece 2 (images 2&ndash;3) from the manual correspondences: source images, feathered blend and 2-band blend.</figcaption>
+</figure>
 
 
 
 
-<h2>Part Two: Feature Matching for Auto-stitching</h2>
 
-<p> Part two of this assignment is to implement some functionailities into the image stiching we've done so far from part one
-  to make it automatic from start to finish. The Harris corner detector, feature descriptors, feature matching, and RANSAC all
-  help the script "see" the features and match them.
-</p>
+<h3 id="app-c">C. Part Two: code</h3>
 
-<h3>B.1 Harris Corner Detector</h3>
-
-<p>Computers can't "see" and interpret features as humans do, we can see a patch of blue and call it "sky", or a long blob of brown
-  and a puffier blob of green and call it "tree". We might have already done something similar to a corner detector in part when we
-  manually clicked on the features. I don't know about you, but I liked to choose "corners" of different objects between each of the image
-  pairs earlier because they're easy to find in both images. In contrast, if I clicked in the middle of the sky in one image, chances are
-  the same patch of sky in the other image would be a different shade of blue, and I wouldn't be able to find it. The Harris corner detector 
-  capitalizes on what makes a corner a corner. 
-</p>
-
-<p>Suppose we have a black square on a white background, but it's zoomed so we can only see the top right corner of the square. Then, we translated the square by 40 pixels. 
-  How can you tell the square has been moved? Well, the corner moved. If instead the zoom only allowed us to see the top of the square without the corners, we wouldn't know 
-  if the square had been moved if it moved horizontally unless a corner appears. Point being now, that corners are distinctive features. We call features that change in two 
-  directions a Harris corner.
-</p>
-
-<details class="code-block"><summary>Show Harris corner detector implementation</summary><pre><code></code>
+<details class="code-block"><summary>Show Harris corner detector implementation</summary><pre><code>
 def harris(gray, sigma_d=1.0, sigma_i=1.5, margin=20, rel_thresh=0.01, max_pts=6000, nms_size=7):
-    """Single-scale Harris detector. Response is the harmonic mean det(M)/tr(M) used in Brown et al.
+    &quot;&quot;&quot;Single-scale Harris detector. Response is the harmonic mean det(M)/tr(M) used in Brown et al.
     Returns (pts as [x, y], strengths) of local maxima, sorted strongest first, `margin` px away from the border
-    (the 40x40 descriptor window must fit)."""
+    (the 40x40 descriptor window must fit).&quot;&quot;&quot;
     Ix = gaussian_filter(gray, sigma_d, order=(0, 1))
     Iy = gaussian_filter(gray, sigma_d, order=(1, 0))
     Sxx, Syy, Sxy = (gaussian_filter(a, sigma_i) for a in (Ix * Ix, Iy * Iy, Ix * Iy))
     R = (Sxx * Syy - Sxy ** 2) / (Sxx + Syy + 1e-12)
-    peaks = (R == maximum_filter(R, size=nms_size)) & (R > rel_thresh * R.max())
+    peaks = (R == maximum_filter(R, size=nms_size)) &amp; (R &gt; rel_thresh * R.max())
     h, w = gray.shape
     peaks[:margin], peaks[-margin:], peaks[:, :margin], peaks[:, -margin:] = False, False, False, False
     ys, xs = np.nonzero(peaks)
     f = R[ys, xs]
     order = np.argsort(-f)[:max_pts]
     return np.c_[xs[order], ys[order]].astype(np.float64), f[order]
-
 </code></pre></details>
 
-<img src='out2\building\harris_0.jpg'>
-
-<p>Great. Now we have all our Harris corners. Do you notice that the corners tend to be concentrated on certain features, such as 
-  the trees and the leaves on the ground? In the extreme cases, all features matches are concentrated on one feature, which will mess up the
-  homography calculations. We want to have a good distribution of features across the images, so how do we do this? Let's say we have a tree with
-  many good quality corners, and a wall with a poorer quality corner, but it's the only corner within a 40x40 pixel radius. Let's say we have a 
-  certain threshold on "quality" to determine which features to keep. By this metric, we preserve all the corners related to the tree, but we throw away the one related to the wall,
-  but we can agree that the wall corner is a better feature to keep than the tree corners, because it is more distinctive. So, we can use ANMS
-  (Adaptive Non-Maximum Suppression) to deal with this problem.
-</p>
-
-<p>ANMS works by assigning each feature (aka Harris corner) a score based on how far away the nearest significantly stronger corner is. So back to our tree
-  and wall example, the wall corner is the only corner in its 40x40 pixel radius, so it will have a large score. The tree corners are all within 40x40 pixels 
-  of each other, so they will have smaller scores. We can then sort the corners by their scores and keep the top N corners. This way, we ensure that we have a 
-  good distribution of features across the image, and we don't end up with too many features concentrated on one object.
-</p>
-
-<details class="code-block"><summary>Show ANMS (Adaptive Non-Maximum Suppression) implementation</summary><pre><code></code>
+<details class="code-block"><summary>Show ANMS (Adaptive Non-Maximal Suppression) implementation</summary><pre><code>
 def anms(pts, strength, n_keep=500, c_robust=0.9, chunk=400):
-    """Adaptive Non-Maximal Suppression (Brown et al. sec. 3). Each corner i gets a suppression radius
-        r_i = min_j |x_i - x_j|   over corners j with  f(x_i) < c_robust * f(x_j)
+    &quot;&quot;&quot;Adaptive Non-Maximal Suppression (Brown et al. sec. 3). Each corner i gets a suppression radius
+        r_i = min_j |x_i - x_j|   over corners j with  f(x_i) &lt; c_robust * f(x_j)
     (the distance to the nearest clearly-stronger corner). Keeping the n corners with the LARGEST radii gives a
-    set that is strong AND spatially spread out. pts/strength must be sorted strongest first."""
+    set that is strong AND spatially spread out. pts/strength must be sorted strongest first.&quot;&quot;&quot;
     n = len(pts)
     radius = np.full(n, np.inf)
     for s in range(0, n, chunk):
         e = min(n, s + chunk)
         d2 = ((pts[s:e, None, :] - pts[None, :, :]) ** 2).sum(-1)
-        stronger = strength[s:e, None] < c_robust * strength[None, :]
+        stronger = strength[s:e, None] &lt; c_robust * strength[None, :]
         d2 = np.where(stronger, d2, np.inf)
         radius[s:e] = d2.min(axis=1)
-    keep = np.argsort(-radius, kind="stable")[:n_keep]        # strongest corner has radius inf -> always kept
+    keep = np.argsort(-radius, kind=&quot;stable&quot;)[:n_keep]        # strongest corner has radius inf -&gt; always kept
     return pts[keep], radius[keep]
-
 </code></pre></details>
 
-<h3>B.2 Feature Descriptor Extraction</h3>
-
-<p>Nice! Now we've got some good features selected, we move onto matching them across images. We might be thinking, hmm,
-  even if we know two features are the same, we might not be able to match them if they are in different locations or scales or even
-  lighting conditions. We learned at some point in the past that good features tend to have a good amount of low-frequency information (please trust me
-  on this one), so this is preserved while being downsampled, so let's do that.
-  We start by taking a 40x40 pixel patch around each feature, and downsampling it to an 8x8 patch. We're choosing 40x40 because it provides a good balance 
-  between capturing enough context, suppressing noise, and maintaining computational efficiency. We can then flatten the 8x8 patch into a 
-  64-dimensional vector, and normalize it to have unit length. We also normalize the descriptors to have zero mean and unit standard deviation, so now it's invariant 
-  to brightness and contrast changes. Now we can compare descriptors using the dot product. Yay for linear algebra!
-</p>
-
-<details class="code-block"><summary>Show Feature descriptor extraction implementation</summary><pre><code></code>
+<details class="code-block"><summary>Show feature descriptor extraction implementation</summary><pre><code>
 def extract_descriptors(gray, pts, win=40, size=8, blur_sigma=2.0):
-    """Axis-aligned descriptors: blur the image, then sample an 8x8 grid with spacing 5 px from the 40x40 window
+    &quot;&quot;&quot;Axis-aligned descriptors: blur the image, then sample an 8x8 grid with spacing 5 px from the 40x40 window
     around each corner (so each descriptor value is a smoothed average over a big neighbourhood).
     Bias/gain normalise (zero mean, unit std) for robustness to brightness/contrast changes.
-    Returns (descs [n, 64], pts that were kept)."""
+    Returns (descs [n, 64], pts that were kept).&quot;&quot;&quot;
     blurred = gaussian_filter(gray, blur_sigma)
     step = win // size                                          # 5
     offs = (np.arange(size) - size // 2) * step + step // 2 + 0  # -17,-12,...,18 (centred on the corner)
     h, w = gray.shape
     xi, yi = np.rint(pts[:, 0]).astype(int), np.rint(pts[:, 1]).astype(int)
-    ok = (xi + offs.min() >= 0) & (xi + offs.max() < w) & (yi + offs.min() >= 0) & (yi + offs.max() < h)
+    ok = (xi + offs.min() &gt;= 0) &amp; (xi + offs.max() &lt; w) &amp; (yi + offs.min() &gt;= 0) &amp; (yi + offs.max() &lt; h)
     xi, yi, pts = xi[ok], yi[ok], pts[ok]
     patches = blurred[yi[:, None, None] + offs[None, :, None], xi[:, None, None] + offs[None, None, :]]   # n x 8 x 8
     flat = patches.reshape(len(pts), -1)
     flat = (flat - flat.mean(1, keepdims=True)) / (flat.std(1, keepdims=True) + 1e-8)
     return flat, pts
-
 </code></pre></details>
 
-<img src='out2\building\descriptors_0.jpg'>
-
-<h3>B.3 Feature Matching</h3>
-
-<p>Dun dah dah! You guessed it, now we have our descriptors and go match them across the different images we have. The first thing we do is use
-  a distance function such as Euclidean distance (L2) or SSD to compare each descriptor in one image to every descriptor in the other image. Now we can see
-  how computationally expensive it would have been if we did not downsample. It's okay if you can't see the problem with this (since I certainly didn't), but
-  the problem is that a single descriptor on one image might have multiple similar distance descriptors from the second image. Lowe's Ratio Test is used to deal 
-  with this problem. It works by taking the two closest matches for each descriptor and comparing their distances. If Lowe's ratio is low, this means that the first
-  descrptor distance is significantly smaller than the second closest descriptor distance, making it a much better match than the second. If it's high, it indicates 
-  that the two descriptors are similar, leading to an ambiguous match. We can threshold this value to filter out the ambiguous matches. 
-</p>
-
-<details class="code-block"><summary>Show Feature matching and Lowe's ratio implementation</summary><pre><code></code>
+<details class="code-block"><summary>Show feature matching and Lowe's ratio implementation</summary><pre><code>
 def nn_ratios(d1, d2):
-    """For every descriptor in image 1: index of its nearest neighbour in image 2 and the ratio
-    d(1st NN) / d(2nd NN)  (small ratio = the best match is much better than the runner-up = distinctive)."""
+    &quot;&quot;&quot;For every descriptor in image 1: index of its nearest neighbour in image 2 and the ratio
+    d(1st NN) / d(2nd NN)  (small ratio = the best match is much better than the runner-up = distinctive).&quot;&quot;&quot;
     dists, idx = cKDTree(d2).query(d1, k=2)
     return idx[:, 0], dists[:, 0] / (dists[:, 1] + 1e-12)
 
 def match_features(d1, d2, ratio=0.7):
-    """Lowe ratio test: accept i -> its nearest neighbour j in image 2 if  d(1st NN) / d(2nd NN) < ratio.
-    Returns index arrays (i, j) and the ratios."""
+    &quot;&quot;&quot;Lowe ratio test: accept i -&gt; its nearest neighbour j in image 2 if  d(1st NN) / d(2nd NN) &lt; ratio.
+    Returns index arrays (i, j) and the ratios.&quot;&quot;&quot;
     j, r = nn_ratios(d1, d2)
-    good = r < ratio
+    good = r &lt; ratio
     return np.nonzero(good)[0], j[good], r[good]
 </code></pre></details>
 
-<img src='out2\building\b3_matches_0_1.jpg'>
-<img src='out2\building\b3_patche_pairs_0_1.jpg'>
+<details class="code-block"><summary>Show 4-point RANSAC implementation</summary><pre><code>
+def ransac_homography(p1, p2, n_iter=5000, eps=3.0, seed=0, min_inliers=8):
+    &quot;&quot;&quot;4-point RANSAC. Repeat: pick 4 random matches, solve H exactly (computeH from part 1), count matches whose
+    reprojection error |H p1 - p2| is below eps pixels (the inliers). Keep the hypothesis with the most inliers
+    (ties: lower total error), then re-fit H by least squares on all its inliers (twice, re-selecting inliers).
+    Returns H, boolean inlier mask.&quot;&quot;&quot;
+    n = len(p1)
+    if n &lt; 4:
+        raise ValueError(f&quot;RANSAC needs &gt;= 4 matches, got {n}&quot;)
+    rng = np.random.default_rng(seed)
+    best_inl, best_cost = None, np.inf
+    best_n = 0
+    with np.errstate(all=&quot;ignore&quot;):
+        for _ in range(n_iter):
+            s = rng.choice(n, 4, replace=False)
+            try:
+                H = P.computeH(p1[s], p2[s])
+            except Exception:
+                continue
+            if not np.all(np.isfinite(H)):
+                continue
+            err = P.reprojection_errors(H, p1, p2)
+            inl = err &lt; eps
+            k = int(inl.sum())
+            cost = float(err[inl].sum())
+            if k &gt; best_n or (k == best_n and cost &lt; best_cost):
+                best_n, best_cost, best_inl = k, cost, inl
+    if best_inl is None or best_n &lt; max(4, min_inliers):
+        raise RuntimeError(f&quot;RANSAC found only {best_n} inliers out of {n} matches (need &gt;= {min_inliers}); &quot;
+                           &quot;try a larger --ratio, more --anms corners, or a larger --eps&quot;)
+    inl = best_inl
+    for _ in range(2):                                           # least-squares refit on the inliers
+        H = P.computeH(p1[inl], p2[inl])
+        inl = P.reprojection_errors(H, p1, p2) &lt; eps
+    H = P.computeH(p1[inl], p2[inl])
+    return H, P.reprojection_errors(H, p1, p2) &lt; eps
+</code></pre></details>
 
-<h3>B.4 RANSAC for Robust Homography</h3>
+<details class="code-block"><summary>Show cylindrical projection and focal-length search implementation</summary><pre><code>
+def to_cyl(pts, f, cx, cy):
+    &quot;&quot;&quot;image pixel (x, y) -&gt; cylinder coordinates (arc length, height), both in pixels.&quot;&quot;&quot;
+    x, y = pts[:, 0] - cx, pts[:, 1] - cy
+    return np.c_[f * np.arctan2(x, f), f * y / np.hypot(x, f)]
 
+def fit_shift(a, b, trim=3.0):
+    &quot;&quot;&quot;Shift s with a ~ b + s (robust: median, then mean of the points within `trim` px). Returns s and residuals.&quot;&quot;&quot;
+    d = a - b
+    s = np.median(d, axis=0)
+    for _ in range(3):
+        r = np.linalg.norm(d - s, axis=1)
+        keep = r &lt; trim
+        if keep.sum() &lt; 4:
+            keep = np.ones(len(r), bool)
+        s = d[keep].mean(axis=0)
+    return s, np.linalg.norm(d - s, axis=1)
+
+def focal_score(f, matches, cx, cy):
+    &quot;&quot;&quot;How badly a pure shift explains the matches for this focal length (median residual, summed over pairs).&quot;&quot;&quot;
+    return sum(np.median(fit_shift(to_cyl(a, f, cx, cy), to_cyl(b, f, cx, cy))[1]) for a, b in matches)
+
+def search_focal(matches, w, cx, cy):
+    fs = np.geomspace(0.4 * w, 2.0 * w, 120)
+    sc = np.array([focal_score(f, matches, cx, cy) for f in fs])
+    f0 = fs[sc.argmin()]
+    fine = np.linspace(f0 * 0.96, f0 * 1.04, 81)                        # refine around the coarse minimum
+    sc2 = np.array([focal_score(f, matches, cx, cy) for f in fine])
+    return fine[sc2.argmin()], fs, sc
+</code></pre></details>
+
+<h3 id="app-d">D. Part Two: parameters</h3>
+
+<table>
+  <caption>Parameters used for Part 2. All photos were first downscaled to 1400 px on the longest side (1400 &times; 1050).</caption>
+  <tr><th>stage</th><th>parameter</th><th>value</th></tr>
+  <tr><td rowspan="4">B.1 Harris</td><td>derivative / window Gaussian &sigma;</td><td>1.0 / 1.5</td></tr>
+  <tr><td>local-maximum neighbourhood</td><td>7 &times; 7</td></tr>
+  <tr><td>response threshold</td><td>1% of the strongest response</td></tr>
+  <tr><td>border margin / max corners</td><td>20 px / strongest 6000</td></tr>
+  <tr><td>B.1 ANMS</td><td>c<sub>robust</sub> / corners kept</td><td>0.9 / 500</td></tr>
+  <tr><td rowspan="2">B.2 Descriptor</td><td>window / pre-blur &sigma; / samples</td><td>40 &times; 40 / 2.0 / 8 &times; 8 (5 px apart)</td></tr>
+  <tr><td>normalization</td><td>zero mean, unit standard deviation</td></tr>
+  <tr><td>B.3 Matching</td><td>Lowe ratio threshold (1-NN / 2-NN)</td><td>0.7</td></tr>
+  <tr><td>B.4 RANSAC</td><td>sample size / iterations / inlier threshold</td><td>4 / 5000 / 3 px</td></tr>
+</table>
+
+<h3 id="app-e">E. Part Two: Waterloo Park (lake_a)</h3>
+
+<p>The figures for the lake that are not in the main text (the main text uses image 1 and the pair 1 &rarr; 2), the second mosaic piece, and the cylindrical panorama.</p>
+
+<h4>Harris corners and ANMS (B.1)</h4>
+
+<figure>
+  <img src="out2/lake_a/harris_0.jpg" alt="Waterloo Park, image 0" loading="lazy">
+  <figcaption>Waterloo Park, image 0. Left: all Harris corners. Right: the 500 corners kept by ANMS.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/harris_2.jpg" alt="Waterloo Park, image 2" loading="lazy">
+  <figcaption>Waterloo Park, image 2. Left: all Harris corners. Right: the 500 corners kept by ANMS.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/harris_3.jpg" alt="Waterloo Park, image 3" loading="lazy">
+  <figcaption>Waterloo Park, image 3. Left: all Harris corners. Right: the 500 corners kept by ANMS.</figcaption>
+</figure>
+
+<h4>Feature descriptors (B.2)</h4>
+
+<figure>
+  <img src="out2/lake_a/descriptors_0.jpg" alt="Waterloo Park, image 0: twelve randomly chosen features, their 40×40 windows (top) and normalized 8×8 descriptors (bottom)" loading="lazy">
+  <figcaption>Waterloo Park, image 0: twelve randomly chosen features, their 40&times;40 windows (top) and normalized 8&times;8 descriptors (bottom).</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/descriptors_2.jpg" alt="Waterloo Park, image 2: twelve randomly chosen features, their 40×40 windows (top) and normalized 8×8 descriptors (bottom)" loading="lazy">
+  <figcaption>Waterloo Park, image 2: twelve randomly chosen features, their 40&times;40 windows (top) and normalized 8&times;8 descriptors (bottom).</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/descriptors_3.jpg" alt="Waterloo Park, image 3: twelve randomly chosen features, their 40×40 windows (top) and normalized 8×8 descriptors (bottom)" loading="lazy">
+  <figcaption>Waterloo Park, image 3: twelve randomly chosen features, their 40&times;40 windows (top) and normalized 8&times;8 descriptors (bottom).</figcaption>
+</figure>
+
+<h4>Feature matching (B.3)</h4>
+
+<figure>
+  <img src="out2/lake_a/b3_matches_0_1.jpg" alt="Waterloo Park, image 0 → 1: the 54 features that pass the ratio test (&lt; 0.7); line colour is the ratio" loading="lazy">
+  <figcaption>Waterloo Park, image 0 &rarr; 1: the 54 features that pass the ratio test (&lt; 0.7); line colour is the ratio.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/b3_patch_pairs_0_1.jpg" alt="Waterloo Park, image 0 → 1: the ten most distinctive matches, with the 40×40 windows and 8×8 descriptors from both images" loading="lazy">
+  <figcaption>Waterloo Park, image 0 &rarr; 1: the ten most distinctive matches, with the 40&times;40 windows and 8&times;8 descriptors from both images.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/b3_ratio_threshold_0_1.jpg" alt="Waterloo Park, image 0 → 1: ratio distribution for correct and incorrect matches (left) and the effect of the threshold (right)" loading="lazy">
+  <figcaption>Waterloo Park, image 0 &rarr; 1: ratio distribution for correct and incorrect matches (left) and the effect of the threshold (right). The dashed line is 0.7.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/b3_matches_2_3.jpg" alt="Waterloo Park, image 2 → 3: the 60 features that pass the ratio test (&lt; 0.7); line colour is the ratio" loading="lazy">
+  <figcaption>Waterloo Park, image 2 &rarr; 3: the 60 features that pass the ratio test (&lt; 0.7); line colour is the ratio.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/b3_patch_pairs_2_3.jpg" alt="Waterloo Park, image 2 → 3: the ten most distinctive matches, with the 40×40 windows and 8×8 descriptors from both images" loading="lazy">
+  <figcaption>Waterloo Park, image 2 &rarr; 3: the ten most distinctive matches, with the 40&times;40 windows and 8&times;8 descriptors from both images.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/b3_ratio_threshold_2_3.jpg" alt="Waterloo Park, image 2 → 3: ratio distribution for correct and incorrect matches (left) and the effect of the threshold (right)" loading="lazy">
+  <figcaption>Waterloo Park, image 2 &rarr; 3: ratio distribution for correct and incorrect matches (left) and the effect of the threshold (right). The dashed line is 0.7.</figcaption>
+</figure>
+
+<h4>RANSAC (B.4)</h4>
+
+<figure>
+  <img src="out2/lake_a/matches_0_1.jpg" alt="Waterloo Park, image 0 → 1: ratio-test matches classified by RANSAC (green = 54 inliers, red = 0 outliers)" loading="lazy">
+  <figcaption>Waterloo Park, image 0 &rarr; 1: ratio-test matches classified by RANSAC (green = 54 inliers, red = 0 outliers).</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/matches_2_3.jpg" alt="Waterloo Park, image 2 → 3: ratio-test matches classified by RANSAC (green = 55 inliers, red = 5 outliers)" loading="lazy">
+  <figcaption>Waterloo Park, image 2 &rarr; 3: ratio-test matches classified by RANSAC (green = 55 inliers, red = 5 outliers).</figcaption>
+</figure>
+
+<p>Homographies found by RANSAC (image <i>i</i> &rarr; image <i>i</i>+1, p2 ~ H p1): <a href="out2/lake_a/H_0_1.txt">H_0_1.txt</a> &middot; <a href="out2/lake_a/H_1_2.txt">H_1_2.txt</a> &middot; <a href="out2/lake_a/H_2_3.txt">H_2_3.txt</a></p>
+
+<h4>Second automatic mosaic piece</h4>
+
+<figure>
+  <img src="out2/lake_a/auto_mosaic_p1_comparison.jpg" alt="Waterloo Park: automatic mosaic, piece 2 (images 2–3): source images, feathered blend and 2-band blend" loading="lazy">
+  <figcaption>Waterloo Park: automatic mosaic, piece 2 (images 2&ndash;3): source images, feathered blend and 2-band blend.</figcaption>
+</figure>
+
+<h4>Bonus: one cylindrical panorama of the whole lake</h4>
+
+<p>In Part 1, the four lake photos could not fit on a single flat plane, so we had to split them. If the camera only rotates, we can project every photo onto a cylinder instead, using x' = f &middot; atan((x &minus; c<sub>x</sub>) / f) and y' = f &middot; (y &minus; c<sub>y</sub>) / &radic;((x &minus; c<sub>x</sub>)&sup2; + f&sup2;), where f is the focal length in pixels. On the cylinder the motion between two neighbouring photos is just a translation, so no chained homographies are needed and nothing can land &ldquo;behind the camera&rdquo;. I reuse the RANSAC inliers from above, search for the focal length f for which a pure shift per pair explains the matches best (f &asymp; 1048 px at 1400 px wide, about a 67&deg; horizontal field of view), chain the shifts, and blend with the same feathering and 2-band code. All four photos now fit in one panorama (code in <a href="#app-c">Appendix C</a>). The first pair fits worst (about 8 px median residual), probably because of the nearby bush in the foreground (parallax), but it is not visible in the blend.</p>
+
+<figure>
+  <img src="out2/lake_a/cyl_twoband.jpg" alt="Cylindrical panorama of the lake" loading="lazy">
+  <figcaption>Waterloo Park: all four photos in one cylindrical panorama (2-band blend), built from the automatic matches. The curved black borders are normal for a cylindrical projection.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/cyl_feather.jpg" alt="The same cylindrical panorama with the feathered blend" loading="lazy">
+  <figcaption>The same cylindrical panorama with the feathered blend.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/cyl_focal_search.png" alt="Focal-length search for the cylindrical panorama: sum over the three pairs of the median residual of a pure shift on the cylinder, for each candidate focal length" loading="lazy">
+  <figcaption>Focal-length search for the cylindrical panorama: sum over the three pairs of the median residual of a pure shift on the cylinder, for each candidate focal length. The minimum, f = 1048 px, is marked.</figcaption>
+</figure>
+
+<h3 id="app-f">F. Part Two: UW campus building</h3>
+
+<p>The same Part Two pipeline on the UW campus building photos. The building is harder than the lake: most corners are on foliage, so the matches are less clean (about 60% inliers instead of 80&ndash;100%).</p>
+
+<h4>Harris corners and ANMS (B.1)</h4>
+
+<figure>
+  <img src="out2/building/harris_0.jpg" alt="Building, image 0" loading="lazy">
+  <figcaption>Building, image 0. Left: all Harris corners (strongest 6000). Right: the 500 corners kept by ANMS.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/harris_1.jpg" alt="Building, image 1" loading="lazy">
+  <figcaption>Building, image 1. Left: all Harris corners (strongest 6000). Right: the 500 corners kept by ANMS.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/harris_2.jpg" alt="Building, image 2" loading="lazy">
+  <figcaption>Building, image 2. Left: all Harris corners (strongest 6000). Right: the 500 corners kept by ANMS.</figcaption>
+</figure>
+
+<h4>Feature descriptors (B.2)</h4>
+
+<figure>
+  <img src="out2/building/descriptors_0.jpg" alt="Building, image 0: twelve randomly chosen features, their 40×40 windows (top) and normalized 8×8 descriptors (bottom)" loading="lazy">
+  <figcaption>Building, image 0: twelve randomly chosen features, their 40&times;40 windows (top) and normalized 8&times;8 descriptors (bottom).</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/descriptors_1.jpg" alt="Building, image 1: twelve randomly chosen features, their 40×40 windows (top) and normalized 8×8 descriptors (bottom)" loading="lazy">
+  <figcaption>Building, image 1: twelve randomly chosen features, their 40&times;40 windows (top) and normalized 8&times;8 descriptors (bottom).</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/descriptors_2.jpg" alt="Building, image 2: twelve randomly chosen features, their 40×40 windows (top) and normalized 8×8 descriptors (bottom)" loading="lazy">
+  <figcaption>Building, image 2: twelve randomly chosen features, their 40&times;40 windows (top) and normalized 8&times;8 descriptors (bottom).</figcaption>
+</figure>
+
+<h4>Feature matching (B.3)</h4>
+
+<figure>
+  <img src="out2/building/b3_matches_0_1.jpg" alt="Building, image 0 → 1: the 66 features that pass the ratio test (&lt; 0.7); line colour is the ratio" loading="lazy">
+  <figcaption>Building, image 0 &rarr; 1: the 66 features that pass the ratio test (&lt; 0.7); line colour is the ratio. RANSAC has not been applied yet, so a few wrong matches remain.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/b3_patch_pairs_0_1.jpg" alt="Building, image 0 → 1: the ten most distinctive matches, with the 40×40 windows and 8×8 descriptors from both images" loading="lazy">
+  <figcaption>Building, image 0 &rarr; 1: the ten most distinctive matches, with the 40&times;40 windows and 8&times;8 descriptors from both images.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/b3_ratio_threshold_0_1.jpg" alt="Building, image 0 → 1: ratio distribution for correct and incorrect matches (left) and the effect of the threshold (right)" loading="lazy">
+  <figcaption>Building, image 0 &rarr; 1: ratio distribution for correct and incorrect matches (left) and the effect of the threshold (right). The dashed line is 0.7.</figcaption>
+</figure>
+
+<p>For this foliage-heavy pair the threshold is much less clear-cut than for the lake: the precision only moves between about 56% and 67% for thresholds from 0.4 to 0.8, and 0.7 keeps about 60% of the correct matches while removing about 70% of the incorrect ones. This is why RANSAC is still needed afterwards.</p>
+
+<figure>
+  <img src="out2/building/b3_matches_1_2.jpg" alt="Building, image 1 → 2: the 113 features that pass the ratio test (&lt; 0.7); line colour is the ratio" loading="lazy">
+  <figcaption>Building, image 1 &rarr; 2: the 113 features that pass the ratio test (&lt; 0.7); line colour is the ratio. RANSAC has not been applied yet, so a few wrong matches remain.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/b3_patch_pairs_1_2.jpg" alt="Building, image 1 → 2: the ten most distinctive matches, with the 40×40 windows and 8×8 descriptors from both images" loading="lazy">
+  <figcaption>Building, image 1 &rarr; 2: the ten most distinctive matches, with the 40&times;40 windows and 8&times;8 descriptors from both images.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/b3_ratio_threshold_1_2.jpg" alt="Building, image 1 → 2: ratio distribution for correct and incorrect matches (left) and the effect of the threshold (right)" loading="lazy">
+  <figcaption>Building, image 1 &rarr; 2: ratio distribution for correct and incorrect matches (left) and the effect of the threshold (right). The dashed line is 0.7.</figcaption>
+</figure>
+
+<h4>RANSAC (B.4)</h4>
+
+<figure>
+  <img src="out2/building/matches_0_1.jpg" alt="Building, image 0 → 1: the ratio-test matches classified by RANSAC (green = 40 inliers, red = 26 outliers)" loading="lazy">
+  <figcaption>Building, image 0 &rarr; 1: the ratio-test matches classified by RANSAC (green = 40 inliers, red = 26 outliers).</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/building/matches_1_2.jpg" alt="Building, image 1 → 2: the ratio-test matches classified by RANSAC (green = 64 inliers, red = 49 outliers)" loading="lazy">
+  <figcaption>Building, image 1 &rarr; 2: the ratio-test matches classified by RANSAC (green = 64 inliers, red = 49 outliers).</figcaption>
+</figure>
+
+<table>
+  <caption>Matching and RANSAC statistics for the building pairs. The mean error is the reprojection error of the final homography on its own inliers, in pixels at 1400 &times; 1050.</caption>
+  <tr><th>pair</th><th>ratio-test matches</th><th>RANSAC inliers</th><th>inlier fraction</th><th>mean inlier error (px)</th></tr>
+  <tr><td>Building 0 &rarr; 1</td><td>66</td><td>40</td><td>61%</td><td>1.31</td></tr>
+  <tr><td>Building 1 &rarr; 2</td><td>113</td><td>64</td><td>57%</td><td>1.21</td></tr>
+</table>
+
+<p>Homographies found by RANSAC (image <i>i</i> &rarr; image <i>i</i>+1, p2 ~ H p1): <a href="out2/building/H_0_1.txt">H_0_1.txt</a> &middot; <a href="out2/building/H_1_2.txt">H_1_2.txt</a></p>
+
+<h4>Automatic mosaic</h4>
+
+<figure>
+  <img src="out2/building/auto_mosaic_comparison.jpg" alt="Building: automatic mosaic" loading="lazy">
+  <figcaption>Building: automatic mosaic. Top: the three source images; middle: feathered blend; bottom: 2-band blend.</figcaption>
+</figure>
+
+</div>
 </body>
 </html>
