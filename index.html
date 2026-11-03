@@ -537,7 +537,7 @@ warp time: nearest 139 ms, bilinear 425 ms
 
 <h3>B.3 Feature Matching</h3>
 
-<p>Dun dah dah! You guessed it, now we have our descriptors and go match them across the different images we have. The first thing we do is use
+<p>Dun dah dah! You guessed it, now we have our descriptors and we'll go match them across the different images we have. The first thing we do is use
   a distance function such as Euclidean distance (L2) or SSD to compare each descriptor in one image to every descriptor in the other image. Now we can see
   how computationally expensive it would have been if we did not downsample. It's okay if you can't see the problem with this (since I certainly didn't), but
   the problem is that a single descriptor on one image might have multiple similar distance descriptors from the second image. Lowe's Ratio Test is used to deal
@@ -562,8 +562,8 @@ warp time: nearest 139 ms, bilinear 425 ms
 </figure>
 
 
-<p>The assignment asks us to pick the threshold using Figure 6b of the paper, which plots how the ratio is distributed for correct and for incorrect matches. The figure below is my version of it.
-  There is no ground truth for these photos, so I call a match "correct" if it later turns out to be a RANSAC inlier (candidates are collected with a loose ratio of 0.9 first). The two groups separate nicely:
+<p>Before we pick a threshold, let's look at how the ratio is distributed for correct and incorrect matches. There is no ground truth for these photos, so I call a match "correct" if it later turns out to be a RANSAC inlier 
+  (candidates are collected with a loose ratio of 0.9 first). This is the joy of having a computer and running the script multiple times! The two groups separate nicely:
   correct matches have ratios mostly between 0.15 and 0.6, while incorrect matches pile up near 1, which is what we expect from ambiguous matches (ripples on the water all look alike). For this pair every match below a ratio of
   about 0.55 is correct, the precision is still 96% at 0.6, falls to 80% at 0.7, and collapses to 62% at 0.8 and 33% at 0.9, while the number of correct matches keeps growing only slowly.
   I settled on 0.7, which keeps about 70% of the correct matches and removes over 90% of the incorrect ones. A stricter threshold would be cleaner but leaves fewer than 25 matches, and RANSAC can deal with the few wrong ones that remain.
@@ -620,12 +620,17 @@ warp time: nearest 139 ms, bilinear 425 ms
  [    0.00158    -0.00019     1.00000]]</pre>
 
 <p>Now we feed these homographies back into the warping and blending code from Part 1. The middle image (image 1) is the reference, exactly as in Part 1, and the result is below. As in Part 1, all four lake photos do not fit on one flat plane,
-  so the mosaic uses images 0&ndash;2; the second piece (images 2&ndash;3) and a single cylindrical panorama of the whole lake are in <a href="#app-e">Appendix E</a>.
+  so the mosaic uses images 0&ndash;2; the second piece (images 2&ndash;3) and a single cylindrical panorama of the whole lake since it's pretty.
 </p>
 
 <figure>
   <img src="out2/lake_a/auto_mosaic_p0_comparison.jpg" alt="Automatic lake mosaic" loading="lazy">
   <figcaption>Waterloo Park: automatic mosaic of images 0&ndash;2. Top: the three source images; middle: feathered blend; bottom: 2-band blend.</figcaption>
+</figure>
+
+<figure>
+  <img src="out2/lake_a/cyl_twoband.jpg" alt="Cylindrical panorama of the lake" loading="lazy">
+  <figcaption>Waterloo Park: all four photos in one cylindrical panorama (2-band blend), built from the automatic matches. The curved black borders are normal for a cylindrical projection.</figcaption>
 </figure>
 
 
@@ -637,7 +642,7 @@ warp time: nearest 139 ms, bilinear 425 ms
 
 <div class="image-grid">
 <figure>
-  <img src="out2/building/manual_mosaic_twoband.jpg" alt="Building mosaic, manual" loading="lazy">
+  <img src="out/building/mosaic_twoband.jpg" alt="Building mosaic, manual" loading="lazy">
   <figcaption>UW campus building mosaic: manual correspondences (Part 1).</figcaption>
 </figure>
 
@@ -649,7 +654,7 @@ warp time: nearest 139 ms, bilinear 425 ms
 
 <div class="image-grid">
 <figure>
-  <img src="out2/lake_a/manual_mosaic_p0_twoband.jpg" alt="Waterloo Park mosaic, manual" loading="lazy">
+  <img src="out/lake_a/mosaic_p0_twoband.jpg" alt="Waterloo Park mosaic, manual" loading="lazy">
   <figcaption>Waterloo Park mosaic (images 0&ndash;2): manual correspondences (Part 1).</figcaption>
 </figure>
 

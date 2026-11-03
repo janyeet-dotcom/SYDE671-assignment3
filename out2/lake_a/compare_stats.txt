@@ -1,0 +1,4 @@
+pair | manual: n clicks, mean err (px) | auto H on the clicks | auto: n inliers, mean err (px) | manual H on the inliers
+0->1 | 5, 0.13 | 0.62 | 54, 0.63 | 5.65
+1->2 | 12, 1.41 | 2.45 | 34, 0.88 | 1.36
+2->3 | 5, 0.28 | 0.93 | 55, 0.78 | 1.69
