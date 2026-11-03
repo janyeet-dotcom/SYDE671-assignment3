@@ -1311,7 +1311,19 @@ def search_focal(matches, w, cx, cy):
   <figcaption>Waterloo Park, image 2 &rarr; 3: ratio-test matches classified by RANSAC (green = 55 inliers, red = 5 outliers).</figcaption>
 </figure>
 
-<p>Homographies found by RANSAC (image <i>i</i> &rarr; image <i>i</i>+1, p2 ~ H p1): <a href="out2/lake_a/H_0_1.txt">H_0_1.txt</a> &middot; <a href="out2/lake_a/H_1_2.txt">H_1_2.txt</a> &middot; <a href="out2/lake_a/H_2_3.txt">H_2_3.txt</a></p>
+<p>Homographies found by RANSAC (image <i>i</i> &rarr; image <i>i</i>+1, p2 ~ H p1):
+</p>
+<pre>
+# homography mapping image 0 -> image 1 (RANSAC, p2 ~ H p1)
+2.181397 -0.131186 -1203.596107
+0.549510 1.778331 -518.584412
+0.000855 -0.000041 1.000000
+
+# homography mapping image 2 -> image 3 (RANSAC, p2 ~ H p1)
+2.612800 -0.057393 -1741.955633
+0.636415 2.114020 -603.834269
+0.001154 -0.000048 1.000000
+</pre>
 
 <h4>Second automatic mosaic piece</h4>
 
@@ -1430,8 +1442,20 @@ def search_focal(matches, w, cx, cy):
   <tr><td>Building 1 &rarr; 2</td><td>113</td><td>64</td><td>57%</td><td>1.21</td></tr>
 </table>
 
-<p>Homographies found by RANSAC (image <i>i</i> &rarr; image <i>i</i>+1, p2 ~ H p1): <a href="out2/building/H_0_1.txt">H_0_1.txt</a> &middot; <a href="out2/building/H_1_2.txt">H_1_2.txt</a></p>
+<p>Homographies found by RANSAC (image <i>i</i> &rarr; image <i>i</i>+1, p2 ~ H p1):
+</p>
 
+<pre>
+# homography mapping image 0 -> image 1 (RANSAC, p2 ~ H p1)
+2.175353 -0.232489 -1188.297618
+0.575996 1.845248 -566.816579
+0.000800 0.000031 1.000000
+
+# homography mapping image 1 -> image 2 (RANSAC, p2 ~ H p1)
+1.840346 -0.111284 -846.192511
+0.415743 1.532282 -378.118747
+0.000600 -0.000009 1.000000
+</pre>
 <h4>Automatic mosaic</h4>
 
 <figure>
