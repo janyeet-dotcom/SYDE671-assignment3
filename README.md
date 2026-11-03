@@ -1,2 +1,2 @@
 # SYDE671-assignment3
-I actually don't know yet
+SYDE671 Assignment 3 takes a deep dive into image stitching and how a phone photo might be able to capture a panorama! We obviously don't know each company's secret sauce (which is why we'd still most likely use our phones to take a panorama), but doing the stitching ourselves might provide some benefit in some cases. One such case might be when we shoot some high-resolution images ourselves (perhaps in microscopy, although the non-prespective shoots might provide some issues), and want to stitch them together!
